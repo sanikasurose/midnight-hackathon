@@ -2,16 +2,15 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "VeriHire",
-  description: "Privacy-preserving hiring verification (hackathon MVP)"
+  title: "VeriHire | Proof, not exposure",
+  description:
+    "Privacy-preserving hiring verification on Midnight. Candidates prove qualifications without exposing raw personal data."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-zinc-950 text-zinc-50">
-        <div className="mx-auto max-w-4xl px-6 py-10">{children}</div>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
