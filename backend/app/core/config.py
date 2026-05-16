@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://verehire:verehire@db:5432/verehire"
     JWT_SECRET: str = "dev_only_change_me"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     ANTHROPIC_API_KEY: str = ""
     MIDNIGHT_RPC_URL: str = ""
     MIDNIGHT_CONTRACT_ADDRESS: str = ""
@@ -17,4 +18,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
