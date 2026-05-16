@@ -51,6 +51,15 @@ a {
   will-change: transform, opacity;
 }
 
+.auth-perspective {
+  perspective: 1400px;
+}
+
+.auth-card {
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
