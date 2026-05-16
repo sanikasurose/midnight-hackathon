@@ -1,0 +1,194 @@
+pragma language_version >= 0.22;
+
+import CompactStandardLibrary;
+
+// DATA STRUCTURES
+
+
+export struct CredentialEntry {
+  owner: Bytes<32>,           
+  timestamp: Bytes<32>,       
+  isActive: Boolean,          
+}
+
+export struct ProofRecord {
+  credentialHash: Bytes<32>,  
+  proofType: Field,           
+  isValid: Boolean,           
+  timestamp: Bytes<32>,       
+}
+
+export struct Requirement {
+  requirementType: Field,     
+  operator: Field,            
+  value: Field,               
+}
+
+export struct ApplicationRecord {
+  jobId: Bytes<32>,           
+  candidateId: Bytes<32>,     
+  verificationResult: Boolean, 
+  timestamp: Bytes<32>,       
+}
+
+
+// LEDGER STATE (Individual declarations - NO block syntax)
+
+export ledger credentialRegistry: Map<Bytes<32>, CredentialEntry>;
+
+export ledger proofRegistry: Map<Bytes<32>, ProofRecord>;
+
+export ledger applicationRegistry: Map<Bytes<32>, ApplicationRecord>;
+
+export ledger proofCounter: Counter;
+
+
+// WITNESSES (Private/off-chain data providers)
+
+
+witness local_secret_key(): Bytes<32>;
+
+witness fetch_gpa_value(): Uint<0..10000>;
+
+witness fetch_proof_commitment(): Bytes<32>;
+
+
+// HELPER CIRCUITS (Pure - no ledger modification)
+
+
+pure circuit verify_gpa_threshold(gpaValue: Uint<0..10000>, threshold: Uint<0..10000>): Boolean {
+  return gpaValue > threshold;
+}
+
+pure circuit match_requirement(
+  proofType: Field,
+  requirementType: Field
+): Boolean {
+  return proofType == requirementType;
+}
+
+pure circuit verify_all_requirements(
+  proofType1: Field,
+  proofValid1: Boolean,
+  reqType1: Field,
+  reqValue1: Field,
+  proofType2: Field,
+  proofValid2: Boolean,
+  reqType2: Field,
+  reqValue2: Field
+): Boolean {
+  // For MVP: check first requiremen
+  const match1 = proofType1 == reqType1;
+  const pass1 = match1 && proofValid1;
+
+  // Check second requirement (if present)
+  const match2 = proofType2 == reqType2;
+  const pass2 = match2 && proofValid2;
+
+  // Both requirements must pass
+  return pass1 && pass2;
+}
+
+
+// MAIN CIRCUITS (Exported, called from SDK)
+
+export circuit store_credential(credentialHash: Bytes<32>): [] {
+  const sk = local_secret_key();
+  const owner = persistentHash<Vector<2, Bytes<32>>>([pad(32, "VeriHire:pk:"), sk]);
+
+  // Check if already registered (prevents duplicates)
+  const already_exists = credentialRegistry.member(credentialHash);
+  assert(!disclose(already_exists), "Credential already registered");
+
+  // Store credential entry
+  const entry = CredentialEntry {
+    owner: disclose(owner),
+    timestamp: disclose(persistentHash<Vector<2, Bytes<32>>>([pad(32, "timestamp"), owner])),
+    isActive: true,
+  };
+
+  credentialRegistry.insert(credentialHash, entry);
+}
+
+export circuit verify_gpa_proof(
+  credentialHash: Bytes<32>,
+  proofHash: Bytes<32>,
+  threshold: Uint<0..10000>
+): [] {
+  // Fetch actual GPA from off-chain storage (witness)
+  const gpaValue = fetch_gpa_value();
+
+  // Verify GPA > threshold
+  const gpa_verified = verify_gpa_threshold(gpaValue, threshold);
+
+  // Increment proof counter (for audit trail)
+  proofCounter.increment(1);
+
+  // Store proof record
+  const proof_record = ProofRecord {
+    credentialHash: credentialHash,
+    proofType: 1,  // 1 = GPA proof
+    isValid: gpa_verified,
+    timestamp: disclose(persistentHash<Vector<2, Bytes<32>>>([pad(32, "proof_time"), proofHash])),
+  };
+
+  proofRegistry.insert(proofHash, proof_record);
+}
+
+export circuit verify_job_requirements(
+  proofHash1: Bytes<32>,
+  proofHash2: Bytes<32>,
+  requiredType1: Field,
+  requiredType2: Field
+): Boolean {
+  // Look up first proof
+  const proof1_exists = proofRegistry.member(proofHash1);
+  const proof1 = proofRegistry.lookup(proofHash1);
+
+  // Look up second proof
+  const proof2_exists = proofRegistry.member(proofHash2);
+  const proof2 = proofRegistry.lookup(proofHash2);
+
+  // Verify first requirement
+  const match1 = proof1.proofType == requiredType1;
+  const pass1 = disclose(match1 && proof1.isValid);
+
+  // Verify second requirement (if both provided)
+  const match2 = proof2.proofType == requiredType2;
+  const pass2 = disclose(match2 && proof2.isValid);
+
+  // Return TRUE only if all requirements pass
+  return disclose(pass1 && pass2);
+}
+
+export circuit submit_application(
+  jobId: Bytes<32>,
+  candidateId: Bytes<32>,
+  verificationResult: Boolean
+): [] {
+  // Generate unique application ID
+  const appId = persistentHash<Vector<3, Bytes<32>>>([
+    jobId,
+    candidateId,
+    pad(32, "app_id")
+  ]);
+
+  // Store minimal application record
+  const app_record = ApplicationRecord {
+    jobId: jobId,
+    candidateId: candidateId,
+    verificationResult: verificationResult,
+    timestamp: disclose(persistentHash<Vector<2, Bytes<32>>>([pad(32, "app_time"), appId])),
+  };
+
+  applicationRegistry.insert(appId, app_record);
+}
+
+export circuit check_credential_status(credentialHash: Bytes<32>): Boolean {
+  const exists = credentialRegistry.member(credentialHash);
+  if (disclose(exists)) {
+    const entry = credentialRegistry.lookup(credentialHash);
+    return entry.isActive;
+  }
+  return false;
+}
