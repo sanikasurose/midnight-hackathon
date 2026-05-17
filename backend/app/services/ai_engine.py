@@ -2,8 +2,8 @@ import io
 import json
 import google.generativeai as genai
 from PyPDF2 import PdfReader
-from app.prompts import RESUME_PARSE_PROMPT, FRAUD_TRUST_PROMPT
-from app.schemas.resume import ResumeClaims, FraudAnalysis
+from app.prompts import RESUME_PARSE_PROMPT, FRAUD_TRUST_PROMPT, JOB_MATCH_PROMPT
+from app.schemas.resume import ResumeClaims, FraudAnalysis, JobMatchAnalysis
 
 
 class AIEngine:
@@ -106,4 +106,47 @@ class AIEngine:
             return validated_report.model_dump()
         except Exception as e:
             raise ValueError(f"Gemini trust report failed schema validation: {e}") from e
+
+    def job_match(self, candidate_claims: dict, job_requirements: list[dict]) -> dict:
+        """
+        Analyzes candidate resume claims against job requirements and returns
+        a comprehensive match analysis for employer hiring decisions.
+
+        Args:
+            candidate_claims: Structured resume data (name, degree, gpa, skills, experience, certifications).
+            job_requirements: List of requirement dicts, each with "type", "operator", "value"
+                              (e.g., [{"type": "GPA", "operator": ">=", "value": 3.5}, ...]).
+
+        Returns:
+            Validated dict: { "match_score": 0-100, "matched_requirements": [...],
+                              "unmatched_requirements": [...], "recommendation": "..." }
+        """
+        from datetime import datetime
+        current_date_str = datetime.utcnow().strftime("%B %Y")
+
+        prompt = f"""
+        {JOB_MATCH_PROMPT}
+
+        Current Evaluation Date: {current_date_str}
+
+        Candidate Resume Claims:
+        {json.dumps(candidate_claims, indent=2)}
+
+        Job Requirements:
+        {json.dumps(job_requirements, indent=2)}
+        """
+
+        response = self.model.generate_content(prompt)
+
+        try:
+            cleaned_text = self._clean_json_text(response.text)
+            parsed_json = json.loads(cleaned_text)
+        except (json.JSONDecodeError, AttributeError) as e:
+            raise ValueError(f"Failed to parse Gemini job match response as JSON: {e}") from e
+
+        try:
+            validated_analysis = JobMatchAnalysis.model_validate(parsed_json)
+            return validated_analysis.model_dump()
+        except Exception as e:
+            raise ValueError(f"Gemini job match response failed schema validation: {e}") from e
 
