@@ -4,6 +4,9 @@ import type {
   AuthLoginRequest,
   AuthRegisterRequest,
   AuthResponse,
+  EmployerApplicationItem,
+  JobCreateRequest,
+  JobCreateResponse,
   JobListItem,
   ProofGenerateRequest,
   ProofGenerateResponse,
@@ -100,6 +103,10 @@ export const api = {
   getProofStatus: (proofId: string) =>
     apiRequest<ProofStatusResponse>(`/proof/status/${encodeURIComponent(proofId)}`),
   listJobs: () => apiRequest<JobListItem[]>("/jobs", { auth: false }),
+  createJob: (payload: JobCreateRequest) =>
+    apiRequest<JobCreateResponse>("/jobs", { method: "POST", body: payload }),
+  listEmployerJobs: () => apiRequest<JobListItem[]>("/jobs/employer/mine"),
+  listEmployerApplications: () => apiRequest<EmployerApplicationItem[]>("/jobs/employer/applications"),
   applyToJob: (jobId: number, payload: ApplicationCreateRequest) =>
     apiRequest<ApplicationCreateResponse>(`/jobs/${jobId}/apply`, { method: "POST", body: payload })
 };

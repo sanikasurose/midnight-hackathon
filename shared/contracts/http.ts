@@ -148,7 +148,10 @@ export type JobCreateResponse = { job_id: number; title: string };
 export type JobListItem = {
   id: number;
   title: string;
+  description?: string | null;
   requirements: Record<string, unknown>;
+  application_count?: number;
+  created_at?: string | null;
 };
 
 export type JobResponse = {
@@ -163,6 +166,18 @@ export type ApplicationCreateResponse = {
   application_id: number;
   job_id: number;
   verification_status: "PENDING" | "VERIFIED" | "FAILED" | string;
+};
+
+export type EmployerApplicationItem = {
+  application_id: number;
+  job_id: number;
+  job_title: string;
+  candidate_id: number;
+  candidate_email?: string | null;
+  credential_id?: number | null;
+  credential_type?: string | null;
+  verification_status: "PENDING" | "VERIFIED" | "FAILED" | string;
+  created_at?: string | null;
 };
 
 // ============================================================================
