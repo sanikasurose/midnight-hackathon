@@ -10,7 +10,9 @@ from app.schemas.jobs import (
     JobCreateResponse,
     JobGetResponse,
 )
+from app.schemas.applications import ApplicationCreateRequest, ApplicationCreateResponse
 from app.services.auth_service import decode_token, get_bearer_token
+from app.services.application_service import create_application
 from app.services.job_service import create_job as create_job_record
 from app.services.job_service import get_job as get_job_record
 from app.services.job_service import list_jobs as list_jobs_records
@@ -61,4 +63,33 @@ def get_job(job_id: int, db: Session = Depends(get_db)) -> JobGetResponse:
         title=job.title,
         description=job.description,
         requirements=job.requirements or {},
+    )
+
+
+@router.post("/{job_id}/apply", response_model=ApplicationCreateResponse)
+def apply_to_job(
+    job_id: int,
+    payload: ApplicationCreateRequest,
+    db: Session = Depends(get_db),
+    token: str = Depends(get_bearer_token),
+) -> ApplicationCreateResponse:
+    claims = decode_token(token)
+    role = claims.get("role")
+    candidate_id = claims.get("user_id")
+
+    if role != "CANDIDATE":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Candidate role required")
+    if not isinstance(candidate_id, int):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    application = create_application(
+        db,
+        job_id=job_id,
+        candidate_id=candidate_id,
+        credential_id=payload.credential_id,
+    )
+    return ApplicationCreateResponse(
+        application_id=application.id,
+        job_id=application.job_id,
+        verification_status=application.verification_status,
     )
