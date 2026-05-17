@@ -10,3 +10,4 @@ frontend/.next/
 frontend/out/
 *.log
 uploads/
+*.db

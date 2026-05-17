@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.schemas.resume import ResumeClaimsResponse, ResumeUploadResponse
+from app.schemas.resume import ResumeClaimsResponse, ResumeUploadResponse, ResumeClaims
 from app.services.ai_engine import AIEngine
 from app.services.file_storage import validate_file_size, validate_pdf_upload
 from app.services.resume_service import create_resume_from_upload
+from app.models.resume import Resume
 
 router = APIRouter()
 
@@ -34,6 +36,8 @@ async def upload_resume(
 
 
 @router.get("/{resume_id}/claims", response_model=ResumeClaimsResponse)
-def get_claims(resume_id: int) -> ResumeClaimsResponse:
-    # TODO: load claims for a resume
-    return ResumeClaimsResponse(resume_id=resume_id, claims={})
+def get_claims(resume_id: int, db: Session = Depends(get_db)) -> ResumeClaimsResponse:
+    resume = db.execute(select(Resume).where(Resume.id == resume_id)).scalar_one_or_none()
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    return ResumeClaimsResponse(resume_id=resume_id, claims=resume.parsed_claims or {})

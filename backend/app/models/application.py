@@ -13,9 +13,16 @@ class Application(Base):
     job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), index=True, nullable=False)
     candidate_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
 
+    # Legacy field used by earlier proof-based apply flow. Keep nullable for backward compatibility.
+    proof_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # Current MVP linkage: applications reference a credential record.
     # NOTE: This column may be added via lightweight init_db ALTER TABLE during hackathon development.
     credential_id: Mapped[int | None] = mapped_column(ForeignKey("credentials.id"), index=True, nullable=True)
-    verification_status: Mapped[str] = mapped_column(String, nullable=False, default="PENDING")  # PENDING|VERIFIED|FAILED
+
+    verification_status: Mapped[str] = mapped_column(
+        String, nullable=False, default="PENDING"
+    )  # PENDING|VERIFIED|FAILED
     ai_report: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -1,23 +1,28 @@
+import logging
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.jobs import (
-    JobListItem,
-    JobCreateRequest,
-    JobCreateResponse,
-    JobGetResponse,
-)
 from app.schemas.applications import ApplicationCreateRequest, ApplicationCreateResponse
-from app.services.auth_service import decode_token, get_bearer_token
+from app.schemas.jobs import JobCreateRequest, JobCreateResponse, JobGetResponse, JobListItem, JobRequirement
 from app.services.application_service import create_application
+from app.services.auth_service import decode_token, get_bearer_token
 from app.services.job_service import create_job as create_job_record
 from app.services.job_service import get_job as get_job_record
 from app.services.job_service import list_jobs as list_jobs_records
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def _normalize_requirements(requirements: dict[str, Any] | list[JobRequirement]) -> dict[str, Any]:
+    if isinstance(requirements, list):
+        return {req.type: {"operator": req.operator, "value": req.value} for req in requirements}
+    return requirements
 
 
 @router.post("", response_model=JobCreateResponse)
@@ -39,13 +44,15 @@ def create_job(
     if not employer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employer not found")
 
+    requirements = _normalize_requirements(payload.requirements or {})
     job = create_job_record(
         db,
         employer_id=employer_id,
         title=payload.title,
         description=payload.description,
-        requirements=payload.requirements or {},
+        requirements=requirements,
     )
+    logger.info("Created job %s for employer %s", job.id, employer_id)
     return JobCreateResponse(job_id=job.id, title=job.title)
 
 
@@ -93,3 +100,4 @@ def apply_to_job(
         job_id=application.job_id,
         verification_status=application.verification_status,
     )
+
