@@ -1,209 +1,103 @@
-"""
-Job routes: create jobs, view jobs, apply with proof verification.
-
-/jobs (POST) - Create job with requirements
-/jobs/{job_id} (GET) - Get job details
-/jobs/{job_id}/apply (POST) - Apply with proof verification
-"""
-
 import logging
-from datetime import datetime
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models import Job
-from app.schemas.jobs import (
-    JobApplyRequest,
-    JobApplyResponse,
-    JobCreateRequest,
-    JobCreateResponse,
-    JobGetResponse,
-)
-from app.services.verification_service import VerificationService
+from app.models.user import User
+from app.schemas.applications import ApplicationCreateRequest, ApplicationCreateResponse
+from app.schemas.jobs import JobCreateRequest, JobCreateResponse, JobGetResponse, JobListItem, JobRequirement
+from app.services.application_service import create_application
+from app.services.auth_service import decode_token, get_bearer_token
+from app.services.job_service import create_job as create_job_record
+from app.services.job_service import get_job as get_job_record
+from app.services.job_service import list_jobs as list_jobs_records
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _normalize_requirements(requirements: dict[str, Any] | list[JobRequirement]) -> dict[str, Any]:
+    if isinstance(requirements, list):
+        return {req.type: {"operator": req.operator, "value": req.value} for req in requirements}
+    return requirements
 
 
 @router.post("", response_model=JobCreateResponse)
 def create_job(
     payload: JobCreateRequest,
     db: Session = Depends(get_db),
+    token: str = Depends(get_bearer_token),
 ) -> JobCreateResponse:
-    """
-    Create a new job posting with requirements.
-    
-    Args:
-        payload: {
-            "title": "Senior Engineer",
-            "description": "...",
-            "requirements": [
-                {"type": "GPA", "operator": ">", "value": 3.5},
-                {"type": "EXPERIENCE", "operator": ">=", "value": 2}
-            ]
-        }
-    
-    Returns:
-        {
-            "job_id": 123,
-            "title": "Senior Engineer",
-            "requirements": [...]
-        }
-    """
-    try:
-        logger.info(f"Creating job: {payload.title}")
+    claims = decode_token(token)
+    role = claims.get("role")
+    employer_id = claims.get("user_id")
 
-        # Convert list to dict for storage (backward compat)
-        requirements = payload.requirements
-        if isinstance(requirements, list):
-            requirements_dict = {}
-            for req in requirements:
-                requirements_dict[req.type] = {
-                    "operator": req.operator,
-                    "value": req.value,
-                }
-            requirements = requirements_dict
+    if role != "EMPLOYER":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Employer role required")
+    if not isinstance(employer_id, int):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-        # Create job
-        job = Job(
-            title=payload.title,
-            description=payload.description,
-            requirements=requirements,
-        )
-        db.add(job)
-        db.commit()
-        db.refresh(job)
+    employer = db.execute(select(User).where(User.id == employer_id)).scalar_one_or_none()
+    if not employer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employer not found")
 
-        logger.info(f"Created job {job.id}")
+    requirements = _normalize_requirements(payload.requirements or {})
+    job = create_job_record(
+        db,
+        employer_id=employer_id,
+        title=payload.title,
+        description=payload.description,
+        requirements=requirements,
+    )
+    logger.info("Created job %s for employer %s", job.id, employer_id)
+    return JobCreateResponse(job_id=job.id, title=job.title)
 
-        return JobCreateResponse(
-            job_id=job.id,
-            title=job.title,
-            description=job.description,
-            requirements=job.requirements or {},
-            created_at=job.created_at.isoformat() if job.created_at else datetime.utcnow().isoformat(),
-        )
 
-    except Exception as e:
-        logger.exception(f"Error creating job: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+@router.get("", response_model=list[JobListItem])
+def list_jobs(db: Session = Depends(get_db)) -> list[JobListItem]:
+    jobs = list_jobs_records(db)
+    return [JobListItem(id=job.id, title=job.title, requirements=job.requirements or {}) for job in jobs]
 
 
 @router.get("/{job_id}", response_model=JobGetResponse)
-def get_job(
-    job_id: int,
-    db: Session = Depends(get_db),
-) -> JobGetResponse:
-    """
-    Get job details.
-    
-    Args:
-        job_id: Job ID
-    
-    Returns:
-        {
-            "job_id": 123,
-            "title": "...",
-            "description": "...",
-            "requirements": {...}
-        }
-    """
-    try:
-        job = db.query(Job).filter(Job.id == job_id).first()
-        
-        if not job:
-            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-
-        return JobGetResponse(
-            job_id=job.id,
-            title=job.title,
-            description=job.description,
-            requirements=job.requirements or {},
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"Error getting job: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+def get_job(job_id: int, db: Session = Depends(get_db)) -> JobGetResponse:
+    job = get_job_record(db, job_id=job_id)
+    return JobGetResponse(
+        id=job.id,
+        title=job.title,
+        description=job.description,
+        requirements=job.requirements or {},
+    )
 
 
-@router.post("/{job_id}/apply", response_model=JobApplyResponse)
+@router.post("/{job_id}/apply", response_model=ApplicationCreateResponse)
 def apply_to_job(
     job_id: int,
-    payload: JobApplyRequest,
+    payload: ApplicationCreateRequest,
     db: Session = Depends(get_db),
-) -> JobApplyResponse:
-    """
-    Apply to a job with ZK proof verification.
-    
-    This is the CRITICAL endpoint: candidate submits proofs, employer sees
-    VERIFIED or NOT VERIFIED (without ever seeing actual data).
-    
-    Flow:
-    1. Candidate provides proof IDs
-    2. Backend verifies proofs against job requirements
-    3. Employer sees result (verified: true/false)
-    4. Application recorded on-chain (no personal data)
-    
-    Args:
-        job_id: Which job
-        payload: {
-            "candidate_id": "0x...",
-            "proof_ids": ["proof_123", "proof_456"]
-        }
-    
-    Returns:
-        {
-            "application_id": "app_123",
-            "verified": true/false,
-            "status": "VERIFIED" | "FAILED",
-            "details": {
-                "requirements_count": 2,
-                "proofs_provided": 2,
-                "all_satisfied": true,
-                "requirement_status": [
-                    {"requirement_type": "GPA", "satisfied": true},
-                    {"requirement_type": "EXPERIENCE", "satisfied": true}
-                ]
-            }
-        }
-    """
-    try:
-        logger.info(
-            f"POST /jobs/{job_id}/apply: candidate={payload.candidate_id}, "
-            f"proofs={len(payload.proof_ids)}"
-        )
+    token: str = Depends(get_bearer_token),
+) -> ApplicationCreateResponse:
+    claims = decode_token(token)
+    role = claims.get("role")
+    candidate_id = claims.get("user_id")
 
-        # Verify application via VerificationService
-        result = VerificationService.verify_application(
-            job_id=str(job_id),
-            candidate_id=payload.candidate_id,
-            proof_ids=payload.proof_ids,
-            db=db,
-        )
+    if role != "CANDIDATE":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Candidate role required")
+    if not isinstance(candidate_id, int):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-        if "error" in result:
-            raise HTTPException(
-                status_code=400,
-                detail=result.get("error", "Verification failed")
-            )
-
-        return JobApplyResponse(
-            application_id=result.get("application_id", f"app_{job_id}_{payload.candidate_id}"),
-            job_id=job_id,
-            candidate_id=payload.candidate_id,
-            verified=result.get("verified", False),
-            status="VERIFIED" if result.get("verified") else "FAILED",
-            details=result.get("details", {}),
-            timestamp=result.get("timestamp", datetime.utcnow().isoformat()),
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"Error applying to job: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    application = create_application(
+        db,
+        job_id=job_id,
+        candidate_id=candidate_id,
+        credential_id=payload.credential_id,
+    )
+    return ApplicationCreateResponse(
+        application_id=application.id,
+        job_id=application.job_id,
+        verification_status=application.verification_status,
+    )
 

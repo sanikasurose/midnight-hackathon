@@ -9,7 +9,7 @@ export type Role = "CANDIDATE" | "EMPLOYER";
 
 export type AuthRegisterRequest = { email: string; password: string; role: Role };
 export type AuthLoginRequest = { email: string; password: string };
-export type AuthResponse = { token: string; user_id: number };
+export type AuthResponse = { token: string; user_id: number; role: Role };
 
 // ============================================================================
 // RESUME & CREDENTIALS
@@ -102,8 +102,11 @@ export type JobRequirement = {
 export type JobCreateRequest = {
   title: string;
   description: string;
-  requirements: JobRequirement[];
+  requirements: JobRequirement[] | Record<string, unknown>;
 };
+
+// Canonical response used by the current backend `/jobs` POST handler.
+export type JobCreateResponse = { job_id: number; title: string };
 
 export type JobResponse = {
   job_id: string;
@@ -168,9 +171,3 @@ export type ErrorResponse = {
   code?: string;
   details?: Record<string, unknown>;
 };
-};
-export type JobCreateResponse = { job_id: number };
-
-export type JobApplyRequest = { candidate_id: number; proof_id: string };
-export type JobApplyResponse = { application_id: number; status: "PENDING" | "PASS" | "FAIL" };
-
