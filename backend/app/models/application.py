@@ -1,6 +1,6 @@
 from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
@@ -19,3 +19,7 @@ class Application(Base):
     ai_report: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    job = relationship("Job", back_populates="applications")
+    candidate = relationship("User", back_populates="applications")
+    credential = relationship("Credential", back_populates="applications")
