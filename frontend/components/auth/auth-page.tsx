@@ -44,6 +44,8 @@ const roles: Array<{ value: Role; label: string; helper: string }> = [
 ];
 
 export function AuthPage({ initialMode }: AuthPageProps) {
+  console.log("AuthPage component mounted, initialMode:", initialMode);
+
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -84,15 +86,19 @@ export function AuthPage({ initialMode }: AuthPageProps) {
       ? { email: form.email, password: form.password, role: form.role }
       : { email: form.email, password: form.password };
 
+    console.log("Submitting auth request:", { mode, payload });
+
     try {
       const auth: AuthResponse = isRegister
         ? await api.register(payload as AuthRegisterRequest)
         : await api.login(payload as AuthLoginRequest);
+      console.log("Auth response:", auth);
       storeAuthSession(auth, payload.email);
 
       const redirectTo = auth.role === "EMPLOYER" ? "/employer" : "/candidate/dashboard";
       window.location.assign(redirectTo);
     } catch (error) {
+      console.error("Auth error:", error);
       setNotice(error instanceof ApiError ? error.message : "Authentication failed. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -273,6 +279,7 @@ export function AuthPage({ initialMode }: AuthPageProps) {
                     type="submit"
                     disabled={isSubmitting}
                     className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-gold px-5 text-sm font-semibold text-night shadow-gold-soft transition-colors hover:bg-champagne focus:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-night disabled:cursor-not-allowed disabled:opacity-70"
+                    onClick={() => console.log("Button clicked!")}
                   >
                     {isSubmitting ? "Preparing..." : copy.submit}
                     <ArrowRight size={16} aria-hidden="true" />

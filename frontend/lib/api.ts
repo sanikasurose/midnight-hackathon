@@ -11,6 +11,9 @@ import type {
   ProofGenerateRequest,
   ProofGenerateResponse,
   ProofStatusResponse,
+  ProofVerifyRequest,
+  ProofVerifyResponse,
+  ResumeClaimsResponse,
   ResumeListItem,
   ResumeUploadResponse
 } from "../../shared/contracts/http";
@@ -61,19 +64,26 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     if (token) requestHeaders.set("Authorization", `Bearer ${token}`);
   }
 
+  const url = `${getApiBaseUrl()}${path}`;
+  console.log(`API Request: ${init.method || "GET"} ${url}`, { body, auth });
+
   let response: Response;
   try {
-    response = await fetch(`${getApiBaseUrl()}${path}`, {
+    response = await fetch(url, {
       ...init,
       headers: requestHeaders,
       body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body)
     });
+    console.log(`API Response: ${response.status} ${response.statusText}`);
   } catch (error) {
+    console.error("API fetch error:", error);
     throw new ApiError("Backend unavailable. Please try again.", 0, error);
   }
 
   const isJson = response.headers.get("content-type")?.includes("application/json");
   const data = isJson ? await response.json().catch(() => null) : await response.text().catch(() => "");
+
+  console.log("API Response data:", data);
 
   if (!response.ok) {
     if (response.status === 401) clearAuthStorage();
@@ -102,6 +112,10 @@ export const api = {
     apiRequest<ProofGenerateResponse>("/proof/generate", { method: "POST", body: payload }),
   getProofStatus: (proofId: string) =>
     apiRequest<ProofStatusResponse>(`/proof/status/${encodeURIComponent(proofId)}`),
+  verifyProof: (payload: ProofVerifyRequest) =>
+    apiRequest<ProofVerifyResponse>("/proof/verify", { method: "POST", body: payload }),
+  getResumeClaims: (resumeId: number) =>
+    apiRequest<ResumeClaimsResponse>(`/resume/${resumeId}/claims`, { auth: false }),
   listJobs: () => apiRequest<JobListItem[]>("/jobs", { auth: false }),
   createJob: (payload: JobCreateRequest) =>
     apiRequest<JobCreateResponse>("/jobs", { method: "POST", body: payload }),

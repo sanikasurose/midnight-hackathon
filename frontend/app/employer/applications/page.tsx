@@ -1,15 +1,20 @@
 "use client";
 
-import { CheckCircle2, Clock, Loader2, UsersRound } from "lucide-react";
+import { CheckCircle2, Clock, Loader2, UsersRound, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/candidate/page-header";
 import { ApiError, api } from "@/lib/api";
-import type { EmployerApplicationItem } from "../../../../shared/contracts/http";
+import type { EmployerApplicationItem, ProofVerifyRequest, ProofVerifyResponse } from "../../../../shared/contracts/http";
 
 export default function EmployerApplicationsPage() {
   const [applications, setApplications] = useState<EmployerApplicationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [verifyProofId, setVerifyProofId] = useState("");
+  const [verifyRequirements, setVerifyRequirements] = useState("{}");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState("");
+  const [verifyResult, setVerifyResult] = useState<ProofVerifyResponse | null>(null);
 
   const loadApplications = useCallback(async () => {
     setLoading(true);
@@ -22,6 +27,38 @@ export default function EmployerApplicationsPage() {
       setLoading(false);
     }
   }, []);
+
+  async function verifyProof() {
+    setVerifyError("");
+    setVerifyResult(null);
+
+    if (!verifyProofId.trim()) {
+      setVerifyError("Please enter a proof ID.");
+      return;
+    }
+
+    let requirements: Record<string, unknown> = {};
+    try {
+      requirements = JSON.parse(verifyRequirements);
+    } catch {
+      setVerifyError("Invalid JSON format for requirements.");
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      const payload: ProofVerifyRequest = {
+        proof_id: verifyProofId,
+        requirements
+      };
+      const result = await api.verifyProof(payload);
+      setVerifyResult(result);
+    } catch (error) {
+      setVerifyError(error instanceof ApiError ? error.message : "Verification failed.");
+    } finally {
+      setIsVerifying(false);
+    }
+  }
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -82,6 +119,85 @@ export default function EmployerApplicationsPage() {
           <EmptyState title="No applications yet" detail="Applications will appear here after candidates apply to your roles." />
         )}
       </Panel>
+
+      <div className="mt-5 border border-white/10 bg-charcoal/85 p-5">
+        <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-50">Verify proof</h2>
+            <p className="mt-1 text-sm text-platinum">Enter a proof ID and requirements to verify a candidate's proof.</p>
+          </div>
+          <ShieldCheck className="text-gold" size={20} aria-hidden="true" />
+        </div>
+
+        <div className="mt-5 grid gap-4">
+          <label className="block">
+            <span className="text-sm font-medium text-zinc-200">Proof ID</span>
+            <input
+              value={verifyProofId}
+              onChange={(event) => setVerifyProofId(event.target.value)}
+              className="mt-2 h-11 w-full border border-white/10 bg-night px-4 text-sm text-zinc-50 outline-none focus:border-gold"
+              placeholder="Enter proof ID from candidate"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-zinc-200">Requirements (JSON)</span>
+            <textarea
+              value={verifyRequirements}
+              onChange={(event) => setVerifyRequirements(event.target.value)}
+              className="mt-2 min-h-[80px] w-full border border-white/10 bg-night px-4 text-sm text-zinc-50 outline-none focus:border-gold font-mono"
+              placeholder='{"threshold": 3.5}'
+            />
+            <span className="mt-2 block text-xs leading-5 text-platinum">
+              Enter verification requirements as JSON. Example: {`{"threshold": 3.5}`}
+            </span>
+          </label>
+
+          <button
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-gold px-5 text-sm font-semibold text-night shadow-gold-soft disabled:cursor-not-allowed disabled:opacity-70"
+            type="button"
+            disabled={isVerifying}
+            onClick={() => void verifyProof()}
+          >
+            {isVerifying ? "Verifying..." : "Verify proof"}
+            <ShieldCheck size={16} aria-hidden="true" />
+          </button>
+
+          {verifyError ? (
+            <p className="border border-rose-500/25 bg-rose-500/[0.08] px-4 py-3 text-sm leading-6 text-rose-100">{verifyError}</p>
+          ) : null}
+
+          {verifyResult ? (
+            <div className="border border-white/10 bg-night/60 p-4">
+              <p className="text-sm font-semibold text-zinc-50">Verification Result</p>
+              <div className="mt-3 grid gap-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-platinum">Proof ID:</span>
+                  <span className="text-zinc-100">{verifyResult.proof_id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-platinum">Status:</span>
+                  <span className={verifyResult.verified ? "text-emerald-100" : "text-rose-100"}>
+                    {verifyResult.status}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-platinum">Verified:</span>
+                  <span className={verifyResult.verified ? "text-emerald-100" : "text-rose-100"}>
+                    {verifyResult.verified ? "Yes" : "No"}
+                  </span>
+                </div>
+                {verifyResult.details && Object.keys(verifyResult.details).length > 0 && (
+                  <div className="mt-2 border-t border-white/10 pt-2">
+                    <span className="text-platinum">Details:</span>
+                    <pre className="mt-1 text-xs text-zinc-100">{JSON.stringify(verifyResult.details, null, 2)}</pre>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
     </section>
   );
 }
