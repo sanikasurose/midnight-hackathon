@@ -22,4 +22,3 @@ def save_resume_pdf(*, pdf_bytes: bytes, uploads_root: str = "uploads/resumes") 
     file_path.write_bytes(pdf_bytes)
     # Normalize to a portable relative path string
     return os.fspath(file_path)
-

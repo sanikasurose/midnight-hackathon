@@ -1,4 +1,4 @@
-import io
+﻿import io
 import json
 import re
 import time
@@ -111,7 +111,7 @@ def retry_on_transient_error(max_retries: int = 3, initial_delay: float = 1.0, b
                     last_exception = e
                     if attempt >= max_retries:
                         break
-                    # Jitter: ±20% variation to prevent synchronization issues
+                    # Jitter: Â±20% variation to prevent synchronization issues
                     jitter = random.uniform(0.8, 1.2)
                     sleep_time = delay * jitter
                     print(f"[AIEngine] Transient error: {e}. Retrying in {sleep_time:.2f}s (Attempt {attempt + 1}/{max_retries})...")
@@ -131,7 +131,7 @@ def retry_on_transient_error(max_retries: int = 3, initial_delay: float = 1.0, b
 
 class AIEngine:
     """
-    Unified, enterprise-grade AI Service for résumé extraction, fraud detection, and job matching.
+    Unified, enterprise-grade AI Service for rÃ©sumÃ© extraction, fraud detection, and job matching.
     Supports both Google Gemini and Anthropic Claude with shared client instances,
     selective exponential retries, robust JSON extraction, and normalized errors.
     """
@@ -190,7 +190,7 @@ class AIEngine:
         formatting oddities, and conversational wrapper text.
         """
         cleaned = text.strip()
-        
+
         # 1. Clean markdown code fences if present
         if "```" in cleaned:
             try:
@@ -256,17 +256,17 @@ class AIEngine:
 
     def parse_resume(self, raw_text: str) -> dict:
         """
-        Parses a PDF résumé text and returns structured claims.
+        Parses a PDF rÃ©sumÃ© text and returns structured claims.
         """
         prompt = f"""
         {RESUME_PARSE_PROMPT}
-        
-        Résumé Text:
+
+        RÃ©sumÃ© Text:
         {raw_text}
         """
-        
+
         response_text = self._call_provider(prompt)
-        
+
         try:
             parsed_json = self._extract_and_parse_json(response_text)
             validated_claims = ResumeClaims.model_validate(parsed_json)
@@ -278,34 +278,34 @@ class AIEngine:
 
     def trust_report(self, resume_claims: dict, job_requirements: dict, raw_text: str = None) -> dict:
         """
-        Analyzes structured résumé claims and optionally raw text/job requirements for anomalies:
+        Analyzes structured rÃ©sumÃ© claims and optionally raw text/job requirements for anomalies:
         - Timeline gaps
         - Inflated claims
         - Inconsistent dates
         - Suspicious wording
-        
+
         Returns validated structured JSON: { "fraud_score": 0-100, "flags": [...] }
         """
         from datetime import datetime
         current_date_str = datetime.utcnow().strftime("%B %Y")
-        
+
         prompt = f"""
         {FRAUD_TRUST_PROMPT}
-        
+
         Current Evaluation Date: {current_date_str}
-        
+
         Structured Resume Claims:
         {json.dumps(resume_claims, indent=2)}
-        
+
         Job Requirements (optional):
         {json.dumps(job_requirements, indent=2) if job_requirements else "None"}
-        
+
         Raw Resume Text (optional):
         {raw_text if raw_text else "None"}
         """
-        
+
         response_text = self._call_provider(prompt)
-        
+
         try:
             parsed_json = self._extract_and_parse_json(response_text)
             validated_report = FraudAnalysis.model_validate(parsed_json)

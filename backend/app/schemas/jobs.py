@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
@@ -11,11 +10,9 @@ class JobRequirement(BaseModel):
 
 
 class JobCreateRequest(BaseModel):
-    title: str = Field(..., description="Job title")
-    description: str = Field(..., description="Job description")
-    requirements: list[JobRequirement] | dict[str, Any] = Field(
-        ..., description="Job requirements"
-    )
+    title: str = Field(..., min_length=3, description="Job title")
+    description: str = Field(..., min_length=10, description="Job description")
+    requirements: list[JobRequirement] | dict[str, Any] = Field(..., description="Job requirements")
 
 
 class JobCreateResponse(BaseModel):
@@ -26,6 +23,15 @@ class JobCreateResponse(BaseModel):
     created_at: str
 
 
+class JobListItem(BaseModel):
+    id: int
+    title: str
+    requirements: dict[str, Any]
+    description: str | None = None
+    application_count: int = 0
+    created_at: str | None = None
+
+
 class JobGetResponse(BaseModel):
     job_id: int
     title: str
@@ -33,9 +39,21 @@ class JobGetResponse(BaseModel):
     requirements: list[JobRequirement] | dict[str, Any]
 
 
+class EmployerApplicationItem(BaseModel):
+    application_id: int
+    job_id: int
+    job_title: str
+    candidate_id: int
+    candidate_email: str | None = None
+    credential_id: int | None = None
+    credential_type: str | None = None
+    verification_status: str
+    created_at: str | None = None
+
+
 class JobApplyRequest(BaseModel):
-    candidate_id: str = Field(..., description="Candidate wallet address or ID")
-    proof_ids: list[str] = Field(..., description="List of proof IDs to verify")
+    candidate_id: str = Field(..., description="Legacy candidate wallet address or ID")
+    proof_ids: list[str] = Field(..., description="Legacy proof IDs to verify")
 
 
 class JobApplyResponse(BaseModel):
@@ -46,4 +64,3 @@ class JobApplyResponse(BaseModel):
     status: str = Field(..., description="VERIFIED | FAILED | PENDING")
     details: Optional[dict[str, Any]] = Field(None, description="Verification details")
     timestamp: str = Field(..., description="ISO datetime")
-

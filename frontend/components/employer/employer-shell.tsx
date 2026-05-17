@@ -5,46 +5,24 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   BriefcaseBusiness,
-  FileUp,
   LayoutDashboard,
-  ListChecks,
   Menu,
   ShieldCheck,
+  UsersRound,
   X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Logo } from "@/components/ui/logo";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { Logo } from "@/components/ui/logo";
 import { cn } from "@/lib/utils";
 
-type CandidateShellProps = {
-  children: ReactNode;
-};
-
 const navItems = [
-  {
-    href: "/candidate/dashboard",
-    label: "Dashboard",
-    icon: LayoutDashboard
-  },
-  {
-    href: "/candidate/upload",
-    label: "Upload",
-    icon: FileUp
-  },
-  {
-    href: "/candidate/jobs",
-    label: "Jobs",
-    icon: BriefcaseBusiness
-  },
-  {
-    href: "/candidate/applications",
-    label: "Applications",
-    icon: ListChecks
-  }
+  { href: "/employer", label: "Overview", icon: LayoutDashboard },
+  { href: "/employer/jobs", label: "Roles", icon: BriefcaseBusiness },
+  { href: "/employer/applications", label: "Applications", icon: UsersRound }
 ] satisfies Array<{ href: string; label: string; icon: LucideIcon }>;
 
-export function CandidateShell({ children }: CandidateShellProps) {
+export function EmployerShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -52,42 +30,27 @@ export function CandidateShell({ children }: CandidateShellProps) {
     setMobileNavOpen(false);
   }
 
-  const nav = (
-    <CandidateNavigation
-      pathname={pathname}
-      onNavigate={closeMobileNav}
-      className="mt-8"
-    />
-  );
+  const nav = <EmployerNavigation pathname={pathname} onNavigate={closeMobileNav} className="mt-8" />;
 
   return (
     <div className="min-h-dvh bg-night text-zinc-50">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r border-white/10 bg-charcoal/90 px-5 py-6 backdrop-blur-xl lg:block">
         <Logo />
-
-        <CandidatePrivacyCard />
-
+        <EmployerTrustCard />
         {nav}
-
-        <div className="absolute bottom-6 left-5 right-5 grid gap-2">
+        <div className="absolute bottom-6 left-5 right-5">
           <LogoutButton />
         </div>
       </aside>
 
       <div
-        className={cn(
-          "fixed inset-0 z-50 lg:hidden",
-          mobileNavOpen ? "pointer-events-auto" : "pointer-events-none"
-        )}
+        className={cn("fixed inset-0 z-50 lg:hidden", mobileNavOpen ? "pointer-events-auto" : "pointer-events-none")}
         aria-hidden={!mobileNavOpen}
       >
         <button
-          className={cn(
-            "absolute inset-0 bg-black/60 transition-opacity",
-            mobileNavOpen ? "opacity-100" : "opacity-0"
-          )}
+          className={cn("absolute inset-0 bg-black/60 transition-opacity", mobileNavOpen ? "opacity-100" : "opacity-0")}
           type="button"
-          aria-label="Close candidate navigation"
+          aria-label="Close employer navigation"
           onClick={closeMobileNav}
         />
         <aside
@@ -100,17 +63,16 @@ export function CandidateShell({ children }: CandidateShellProps) {
             <Logo />
             <button
               className="grid h-10 w-10 place-items-center border border-white/10 text-platinum transition-colors hover:text-zinc-50"
-              aria-label="Close candidate navigation"
+              aria-label="Close employer navigation"
               type="button"
               onClick={closeMobileNav}
             >
               <X size={20} aria-hidden="true" />
             </button>
           </div>
-
-          <CandidatePrivacyCard />
-          <CandidateNavigation pathname={pathname} onNavigate={closeMobileNav} className="mt-8" />
-          <div className="mt-8 grid gap-2">
+          <EmployerTrustCard />
+          <EmployerNavigation pathname={pathname} onNavigate={closeMobileNav} className="mt-8" />
+          <div className="mt-8">
             <LogoutButton />
           </div>
         </aside>
@@ -122,7 +84,7 @@ export function CandidateShell({ children }: CandidateShellProps) {
             <Logo />
             <button
               className="grid h-10 w-10 place-items-center border border-white/10 text-platinum transition-colors hover:border-gold/45 hover:text-zinc-50"
-              aria-label="Open candidate navigation"
+              aria-label="Open employer navigation"
               type="button"
               aria-expanded={mobileNavOpen}
               onClick={() => setMobileNavOpen(true)}
@@ -138,7 +100,7 @@ export function CandidateShell({ children }: CandidateShellProps) {
   );
 }
 
-function CandidatePrivacyCard() {
+function EmployerTrustCard() {
   return (
     <div className="mt-10 border border-gold/25 bg-gold/[0.06] p-4">
       <div className="flex items-center gap-3">
@@ -146,26 +108,28 @@ function CandidatePrivacyCard() {
           <ShieldCheck size={18} aria-hidden="true" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-zinc-50">Privacy mode</p>
-          <p className="text-xs text-platinum">Candidate-controlled</p>
+          <p className="text-sm font-semibold text-zinc-50">Proof-first hiring</p>
+          <p className="text-xs text-platinum">Minimal disclosure</p>
         </div>
       </div>
     </div>
   );
 }
 
-type CandidateNavigationProps = {
+function EmployerNavigation({
+  pathname,
+  onNavigate,
+  className
+}: {
   pathname: string;
   onNavigate?: () => void;
   className?: string;
-};
-
-function CandidateNavigation({ pathname, onNavigate, className }: CandidateNavigationProps) {
+}) {
   return (
-    <nav className={cn("grid gap-2", className)} aria-label="Candidate navigation">
+    <nav className={cn("grid gap-2", className)} aria-label="Employer navigation">
       {navItems.map((item) => {
         const Icon = item.icon;
-        const active = pathname === item.href;
+        const active = item.href === "/employer" ? pathname === item.href : pathname.startsWith(item.href);
 
         return (
           <a

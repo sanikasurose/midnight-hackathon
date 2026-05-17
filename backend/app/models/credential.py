@@ -10,6 +10,7 @@ class Credential(Base):
     __tablename__ = "credentials"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=True)
     resume_id: Mapped[int] = mapped_column(
         ForeignKey("resumes.id", ondelete="CASCADE"), index=True, nullable=False
     )
@@ -25,11 +26,10 @@ class Credential(Base):
 
     # Status tracking
     verification_status: Mapped[str] = mapped_column(String, default="pending")  # pending | verified | failed
-    
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    resume = relationship("Resume")
+    resume = relationship("Resume", back_populates="credentials")
     proofs = relationship("Proof", back_populates="credential")
-

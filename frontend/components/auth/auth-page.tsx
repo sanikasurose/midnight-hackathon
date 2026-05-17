@@ -5,7 +5,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, Eye, EyeOff, LockKeyhole, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { cn } from "@/lib/utils";
-import type { AuthLoginRequest, AuthRegisterRequest, Role } from "../../../shared/contracts/http";
+import type { AuthLoginRequest, AuthRegisterRequest, AuthResponse, Role } from "../../../shared/contracts/http";
+import { api, ApiError } from "@/lib/api";
+import { storeAuthSession } from "@/components/auth/auth-storage";
 
 type AuthMode = "login" | "register";
 
@@ -82,13 +84,19 @@ export function AuthPage({ initialMode }: AuthPageProps) {
       ? { email: form.email, password: form.password, role: form.role }
       : { email: form.email, password: form.password };
 
-    await new Promise((resolve) => setTimeout(resolve, 550));
-    setNotice(
-      isRegister
-        ? `Account setup prepared for ${payload.email}. Backend auth can now be connected.`
-        : `Sign-in prepared for ${payload.email}. Backend auth can now be connected.`
-    );
-    setIsSubmitting(false);
+    try {
+      const auth: AuthResponse = isRegister
+        ? await api.register(payload as AuthRegisterRequest)
+        : await api.login(payload as AuthLoginRequest);
+      storeAuthSession(auth, payload.email);
+
+      const redirectTo = auth.role === "EMPLOYER" ? "/employer" : "/candidate/dashboard";
+      window.location.assign(redirectTo);
+    } catch (error) {
+      setNotice(error instanceof ApiError ? error.message : "Authentication failed. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
