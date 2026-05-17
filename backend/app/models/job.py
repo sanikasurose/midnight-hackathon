@@ -13,9 +13,8 @@ class Job(Base):
 
     title: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=False)
-    requirements: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    requirements: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     employer = relationship("User")
-

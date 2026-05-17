@@ -36,10 +36,4 @@ export type JobCreateRequest = {
   description: string;
   requirements: Record<string, unknown>;
 };
-export type JobCreateResponse = { job_id: number };
-
-export type JobApplyRequest = { candidate_id: number; proof_id: string };
-export type JobApplyResponse = {
-  application_id: number;
-  status: "PENDING" | "PASS" | "FAIL";
-};
+export type JobCreateResponse = { job_id: number; title: string };
