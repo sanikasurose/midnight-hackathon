@@ -1,14 +1,13 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy.orm import Session
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.models.resume import Resume
 from app.schemas.resume import ResumeClaimsResponse, ResumeCredential, ResumeListItem, ResumeUploadResponse
 from app.services.ai_engine import AIEngine
-from app.services.file_storage import validate_file_size, validate_pdf_upload
 from app.services.resume_service import create_resume_from_upload
-from app.models.resume import Resume
 
 router = APIRouter()
 
@@ -19,10 +18,18 @@ async def upload_resume(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> ResumeUploadResponse:
-    validate_pdf_upload(filename=file.filename, content_type=file.content_type)
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="PDF only")
+    if file.content_type not in (None, "", "application/pdf", "application/octet-stream"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="PDF only")
 
     pdf_bytes = await file.read()
-    validate_file_size(file_bytes=pdf_bytes, max_size_mb=int(settings.MAX_RESUME_SIZE_MB))
+    max_bytes = int(settings.MAX_RESUME_SIZE_MB) * 1024 * 1024
+    if len(pdf_bytes) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large (max {settings.MAX_RESUME_SIZE_MB} MB)",
+        )
 
     ai_engine = AIEngine(settings.GEMINI_API_KEY)
     resume, claims, credentials = create_resume_from_upload(

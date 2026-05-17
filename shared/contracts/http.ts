@@ -1,19 +1,8 @@
-// Shared request/response shapes with Midnight integration
-// Mirrors VeriHire PRD and Compact contract data structures
-
 export type Role = "CANDIDATE" | "EMPLOYER";
-
-// ============================================================================
-// AUTHENTICATION
-// ============================================================================
 
 export type AuthRegisterRequest = { email: string; password: string; role: Role };
 export type AuthLoginRequest = { email: string; password: string };
 export type AuthResponse = { token: string; user_id: number; role: Role };
-
-// ============================================================================
-// RESUME & CREDENTIALS
-// ============================================================================
 
 export type ExperienceItem = {
   company: string;
@@ -43,6 +32,7 @@ export type ResumeUploadResponse = {
   claims: ResumeClaims;
   credentials: ResumeCredential[];
 };
+
 export type ResumeListItem = {
   resume_id: number;
   original_filename?: string | null;
@@ -50,68 +40,32 @@ export type ResumeListItem = {
   claims: ResumeClaims;
   credentials: ResumeCredential[];
 };
+
 export type ResumeClaimsResponse = { resume_id: number; claims: ResumeClaims };
 
-// Credential claim extracted from resume
-export type CredentialClaim = {
-  claim_type: "GPA" | "EXPERIENCE" | "DEGREE" | "CERTIFICATION";
-  claim_value: string;  // encrypted/hashed reference
-  credential_hash: string;  // SHA256 hash of claim (for on-chain storage)
-  midnight_tx_id?: string;  // transaction hash from contract.store_credential()
-};
-
-// ============================================================================
-// PROOF GENERATION & VERIFICATION (Midnight Integration)
-// ============================================================================
-
-// Request to generate a ZK proof
 export type ProofGenerateRequest = {
-  credential_id: string;  // credential to prove
-  threshold: number;      // for GPA: 3.5 means "GPA > 3.5"
-  gpa_value?: number;     // off-chain witness value; backend says it is never stored on-chain
-  proof_type?: "GPA" | "EXPERIENCE" | "DEGREE" | "CERTIFICATION";  // default: GPA
+  credential_id: string;
+  threshold: number;
+  gpa_value?: number;
+  proof_type?: "GPA" | "EXPERIENCE" | "DEGREE" | "CERTIFICATION";
 };
 
-// Response from proof generation
 export type ProofGenerateResponse = {
-  proof_id: string;       // unique proof identifier
-  proof_hash: string;     // SHA256 hash of proof (for on-chain lookup)
-  credential_hash?: string | null;  // which credential this proof is for
+  proof_id: string;
+  proof_hash: string;
+  credential_hash?: string | null;
   proof_type: "GPA" | "EXPERIENCE" | "DEGREE" | "CERTIFICATION";
   public_inputs: {
-    threshold: number;    // what was being proved (GPA > threshold)
-    commitment?: string;  // ZK commitment (if applicable)
+    threshold: number;
+    commitment?: string;
   };
-  proof?: string;         // actual proof bytes (hex-encoded)
+  proof?: string;
   status: "generated" | "pending" | "verified" | "failed";
-  timestamp: string;      // ISO datetime
-  tx_hash?: string;       // transaction hash from contract.verify_gpa_proof()
-  error?: string | null;
-};
-
-// Request to verify a proof against requirements
-export type ProofVerifyRequest = {
-  proof_id: string;
-  requirements?: Record<string, { operator: ">=" | ">" | "==" | "<" | "<="; value: number }>;
-};
-
-// Response from proof verification
-export type ProofVerifyResponse = {
-  verified: boolean;      // TRUE if proof is valid
-  proof_id: string;
-  proof_hash?: string | null;
-  status: "verified" | "failed" | "pending";
   timestamp: string;
-  details?: Record<string, unknown>;
+  tx_hash?: string;
   error?: string | null;
 };
 
-// Request to check proof status
-export type ProofStatusRequest = {
-  proof_id: string;
-};
-
-// Response with proof status
 export type ProofStatusResponse = {
   proof_id: string;
   proof_hash?: string | null;
@@ -123,17 +77,13 @@ export type ProofStatusResponse = {
     stored_on_chain: boolean;
     transaction_hash?: string;
     block_number?: number;
-  };
+  } | null;
 };
-
-// ============================================================================
-// JOB REQUIREMENTS & APPLICATIONS
-// ============================================================================
 
 export type JobRequirement = {
   type: "GPA" | "EXPERIENCE" | "DEGREE" | "CERTIFICATION";
   operator: ">" | ">=" | "==" | "<" | "<=";
-  value: number;  // GPA > value, EXPERIENCE >= value, etc.
+  value: number;
 };
 
 export type JobCreateRequest = {
@@ -142,8 +92,13 @@ export type JobCreateRequest = {
   requirements: JobRequirement[] | Record<string, unknown>;
 };
 
-// Canonical response used by the current backend `/jobs` POST handler.
-export type JobCreateResponse = { job_id: number; title: string };
+export type JobCreateResponse = {
+  job_id: number;
+  title: string;
+  description?: string;
+  requirements?: JobRequirement[] | Record<string, unknown>;
+  created_at?: string;
+};
 
 export type JobListItem = {
   id: number;
@@ -155,7 +110,8 @@ export type JobListItem = {
 };
 
 export type JobResponse = {
-  id: number;
+  id?: number;
+  job_id?: number;
   title: string;
   description: string;
   requirements: Record<string, unknown>;
@@ -180,30 +136,12 @@ export type EmployerApplicationItem = {
   created_at?: string | null;
 };
 
-// ============================================================================
-// MIDNIGHT INTEGRATION TYPES
-// ============================================================================
-
 export type MidnightConfig = {
   rpc_url: string;
   proof_server_url: string;
   contract_address: string;
   network: "devnet" | "preview" | "mainnet";
 };
-
-// For troubleshooting/logging
-export type MidnightDebugInfo = {
-  rpc_connected: boolean;
-  proof_server_connected: boolean;
-  contract_deployed: boolean;
-  last_proof_timestamp?: string;
-  pending_proofs_count: number;
-  errors?: string[];
-};
-
-// ============================================================================
-// ERROR RESPONSES
-// ============================================================================
 
 export type ErrorResponse = {
   error: string;

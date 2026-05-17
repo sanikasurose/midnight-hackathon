@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, Eye, EyeOff, LockKeyhole, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
@@ -49,7 +48,6 @@ export function AuthPage({ initialMode }: AuthPageProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState("");
-  const [noticeTone, setNoticeTone] = useState<"info" | "error">("info");
   const [form, setForm] = useState<FormState>({
     name: "",
     email: "",
@@ -74,16 +72,13 @@ export function AuthPage({ initialMode }: AuthPageProps) {
 
   function switchMode(nextMode: AuthMode) {
     setNotice("");
-    setNoticeTone("info");
     setMode(nextMode);
     window.history.pushState(null, "", `/${nextMode}`);
   }
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
-    setNotice("");
-    setNoticeTone("info");
 
     const payload: AuthLoginRequest | AuthRegisterRequest = isRegister
       ? { email: form.email, password: form.password, role: form.role }
@@ -98,7 +93,6 @@ export function AuthPage({ initialMode }: AuthPageProps) {
       const redirectTo = auth.role === "EMPLOYER" ? "/employer" : "/candidate/dashboard";
       window.location.assign(redirectTo);
     } catch (error) {
-      setNoticeTone("error");
       setNotice(error instanceof ApiError ? error.message : "Authentication failed. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -285,14 +279,7 @@ export function AuthPage({ initialMode }: AuthPageProps) {
                   </button>
 
                   {notice ? (
-                    <p
-                      className={cn(
-                        "px-4 py-3 text-sm leading-6",
-                        noticeTone === "error"
-                          ? "border border-rose-500/25 bg-rose-500/[0.08] text-rose-100"
-                          : "border border-gold/25 bg-gold/[0.08] text-champagne"
-                      )}
-                    >
+                    <p className="border border-gold/25 bg-gold/[0.08] px-4 py-3 text-sm leading-6 text-champagne">
                       {notice}
                     </p>
                   ) : null}

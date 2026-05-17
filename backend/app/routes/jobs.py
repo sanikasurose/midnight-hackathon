@@ -1,13 +1,17 @@
-import logging
+from __future__ import annotations
+
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.application import Application
+from app.models.credential import Credential
 from app.models.job import Job
+from app.models.resume import Resume
 from app.models.user import User
 from app.schemas.applications import ApplicationCreateRequest, ApplicationCreateResponse
 from app.schemas.jobs import (
@@ -18,14 +22,28 @@ from app.schemas.jobs import (
     JobListItem,
     JobRequirement,
 )
-from app.services.application_service import create_application
-from app.services.auth_service import decode_token, get_bearer_token
-from app.services.job_service import create_job as create_job_record
-from app.services.job_service import get_job as get_job_record
-from app.services.job_service import list_jobs as list_jobs_records
+from app.services.auth_service import decode_token
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def _get_token(credentials: HTTPAuthorizationCredentials | None) -> str:
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+    return credentials.credentials
+
+
+def _require_role(credentials: HTTPAuthorizationCredentials | None, role: str) -> int:
+    claims = decode_token(_get_token(credentials))
+    token_role = claims.get("role")
+    user_id = claims.get("user_id")
+
+    if token_role != role:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"{role.title()} role required")
+    if not isinstance(user_id, int):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    return user_id
 
 
 def _normalize_requirements(requirements: dict[str, Any] | list[JobRequirement]) -> dict[str, Any]:
@@ -34,60 +52,64 @@ def _normalize_requirements(requirements: dict[str, Any] | list[JobRequirement])
     return requirements
 
 
-def _require_employer(token: str) -> int:
-    claims = decode_token(token)
-    role = claims.get("role")
-    employer_id = claims.get("user_id")
-
-    if role != "EMPLOYER":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Employer role required")
-    if not isinstance(employer_id, int):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-    return employer_id
+def _application_counts(db: Session) -> dict[int, int]:
+    rows = db.execute(
+        select(Application.job_id, func.count(Application.id))
+        .group_by(Application.job_id)
+    ).all()
+    return {job_id: count for job_id, count in rows}
 
 
 @router.post("", response_model=JobCreateResponse)
 def create_job(
     payload: JobCreateRequest,
     db: Session = Depends(get_db),
-    token: str = Depends(get_bearer_token),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> JobCreateResponse:
-    employer_id = _require_employer(token)
-
+    employer_id = _require_role(credentials, "EMPLOYER")
     employer = db.execute(select(User).where(User.id == employer_id)).scalar_one_or_none()
     if not employer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employer not found")
 
-    requirements = _normalize_requirements(payload.requirements or {})
-    job = create_job_record(
-        db,
+    job = Job(
         employer_id=employer_id,
         title=payload.title,
         description=payload.description,
-        requirements=requirements,
+        requirements=_normalize_requirements(payload.requirements or {}),
     )
-    logger.info("Created job %s for employer %s", job.id, employer_id)
-    return JobCreateResponse(job_id=job.id, title=job.title)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    return JobCreateResponse(
+        job_id=job.id,
+        title=job.title,
+        description=job.description,
+        requirements=job.requirements or {},
+        created_at=job.created_at.isoformat() if job.created_at else "",
+    )
 
 
 @router.get("/employer/mine", response_model=list[JobListItem])
 def list_employer_jobs(
     db: Session = Depends(get_db),
-    token: str = Depends(get_bearer_token),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> list[JobListItem]:
-    employer_id = _require_employer(token)
+    employer_id = _require_role(credentials, "EMPLOYER")
+    counts = _application_counts(db)
     jobs = (
         db.execute(select(Job).where(Job.employer_id == employer_id).order_by(Job.created_at.desc(), Job.id.desc()))
         .scalars()
         .all()
     )
+
     return [
         JobListItem(
             id=job.id,
             title=job.title,
             description=job.description,
             requirements=job.requirements or {},
-            application_count=len(job.applications),
+            application_count=counts.get(job.id, 0),
             created_at=job.created_at.isoformat() if job.created_at else None,
         )
         for job in jobs
@@ -97,46 +119,45 @@ def list_employer_jobs(
 @router.get("/employer/applications", response_model=list[EmployerApplicationItem])
 def list_employer_applications(
     db: Session = Depends(get_db),
-    token: str = Depends(get_bearer_token),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> list[EmployerApplicationItem]:
-    employer_id = _require_employer(token)
-    rows = (
-        db.execute(
-            select(Application)
-            .join(Job, Application.job_id == Job.id)
-            .where(Job.employer_id == employer_id)
-            .order_by(Application.created_at.desc(), Application.id.desc())
-        )
-        .scalars()
-        .all()
-    )
+    employer_id = _require_role(credentials, "EMPLOYER")
+    rows = db.execute(
+        select(Application, Job, User, Credential)
+        .join(Job, Application.job_id == Job.id)
+        .join(User, Application.candidate_id == User.id)
+        .outerjoin(Credential, Application.credential_id == Credential.id)
+        .where(Job.employer_id == employer_id)
+        .order_by(Application.created_at.desc(), Application.id.desc())
+    ).all()
 
     return [
         EmployerApplicationItem(
             application_id=application.id,
-            job_id=application.job_id,
-            job_title=application.job.title,
+            job_id=job.id,
+            job_title=job.title,
             candidate_id=application.candidate_id,
-            candidate_email=application.candidate.email if application.candidate else None,
+            candidate_email=candidate.email,
             credential_id=application.credential_id,
-            credential_type=application.credential.claim_type if application.credential else None,
+            credential_type=credential.claim_type if credential else None,
             verification_status=application.verification_status,
             created_at=application.created_at.isoformat() if application.created_at else None,
         )
-        for application in rows
+        for application, job, candidate, credential in rows
     ]
 
 
 @router.get("", response_model=list[JobListItem])
 def list_jobs(db: Session = Depends(get_db)) -> list[JobListItem]:
-    jobs = list_jobs_records(db)
+    counts = _application_counts(db)
+    jobs = db.execute(select(Job).order_by(Job.created_at.desc(), Job.id.desc())).scalars().all()
     return [
         JobListItem(
             id=job.id,
             title=job.title,
             description=job.description,
             requirements=job.requirements or {},
-            application_count=len(job.applications),
+            application_count=counts.get(job.id, 0),
             created_at=job.created_at.isoformat() if job.created_at else None,
         )
         for job in jobs
@@ -145,9 +166,12 @@ def list_jobs(db: Session = Depends(get_db)) -> list[JobListItem]:
 
 @router.get("/{job_id}", response_model=JobGetResponse)
 def get_job(job_id: int, db: Session = Depends(get_db)) -> JobGetResponse:
-    job = get_job_record(db, job_id=job_id)
+    job = db.execute(select(Job).where(Job.id == job_id)).scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
     return JobGetResponse(
-        id=job.id,
+        job_id=job.id,
         title=job.title,
         description=job.description,
         requirements=job.requirements or {},
@@ -159,26 +183,44 @@ def apply_to_job(
     job_id: int,
     payload: ApplicationCreateRequest,
     db: Session = Depends(get_db),
-    token: str = Depends(get_bearer_token),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> ApplicationCreateResponse:
-    claims = decode_token(token)
-    role = claims.get("role")
-    candidate_id = claims.get("user_id")
+    candidate_id = _require_role(credentials, "CANDIDATE")
+    job = db.execute(select(Job).where(Job.id == job_id)).scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
-    if role != "CANDIDATE":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Candidate role required")
-    if not isinstance(candidate_id, int):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    credential = (
+        db.execute(
+            select(Credential)
+            .join(Resume, Credential.resume_id == Resume.id)
+            .where(Credential.id == payload.credential_id, Resume.user_id == candidate_id)
+        )
+        .scalar_one_or_none()
+    )
+    if not credential:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credential not found")
 
-    application = create_application(
-        db,
+    existing = db.execute(
+        select(Application).where(Application.job_id == job_id, Application.candidate_id == candidate_id)
+    ).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already applied to this job")
+
+    application = Application(
         job_id=job_id,
         candidate_id=candidate_id,
-        credential_id=payload.credential_id,
+        credential_id=credential.id,
+        proof_id=credential.proof_hash,
+        verification_status="PENDING",
+        ai_report=None,
     )
+    db.add(application)
+    db.commit()
+    db.refresh(application)
+
     return ApplicationCreateResponse(
         application_id=application.id,
         job_id=application.job_id,
         verification_status=application.verification_status,
     )
-

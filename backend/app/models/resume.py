@@ -18,5 +18,5 @@ class Resume(Base):
 
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    user = relationship("User", back_populates="resumes")
+    user = relationship("User")
     credentials = relationship("Credential", back_populates="resume", cascade="all, delete-orphan")

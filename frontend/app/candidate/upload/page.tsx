@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  CheckCircle2,
-  FileText,
-  FileUp,
-  Hash,
-  RefreshCw,
-  ShieldCheck
-} from "lucide-react";
+import { CheckCircle2, FileText, FileUp, Hash, RefreshCw, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/candidate/page-header";
 import { getAuthSession } from "@/components/auth/auth-storage";
@@ -48,7 +41,6 @@ export default function CandidateUploadPage() {
   const [libraryError, setLibraryError] = useState("");
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [steps, setSteps] = useState(baseParsingSteps);
-
   const [selectedCredentialId, setSelectedCredentialId] = useState("");
   const [threshold, setThreshold] = useState("3.5");
   const [gpaValue, setGpaValue] = useState("");
@@ -95,7 +87,7 @@ export default function CandidateUploadPage() {
           saveProofStatus(status);
         }
       } catch {
-        // Polling is best-effort because generated proofs may be mock/local only.
+        // Proof polling is best-effort while Midnight is in mock/dev mode.
       }
     };
 
@@ -182,7 +174,6 @@ export default function CandidateUploadPage() {
     setProofStatus(null);
 
     const selectedCredential = proofableCredentials.find((credential) => String(credential.id) === selectedCredentialId);
-
     if (!selectedCredential) {
       setProofError("Upload a resume with a GPA claim before generating this proof.");
       return;
@@ -382,15 +373,7 @@ export default function CandidateUploadPage() {
   );
 }
 
-function ClaimsPanel({
-  resumeId,
-  claims,
-  credentials
-}: {
-  resumeId: number | null;
-  claims: ResumeClaims;
-  credentials: ResumeCredential[];
-}) {
+function ClaimsPanel({ resumeId, claims, credentials }: { resumeId: number | null; claims: ResumeClaims; credentials: ResumeCredential[] }) {
   return (
     <article className="border border-white/10 bg-charcoal/80">
       <div className="border-b border-white/10 px-5 py-4">
@@ -435,26 +418,6 @@ function ClaimsPanel({
           )}
         </div>
       </div>
-
-      <div className="border-t border-white/10 p-5">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-platinum">Experience</h3>
-        <div className="mt-3 divide-y divide-white/10">
-          {claims.experience.length ? (
-            claims.experience.map((item) => (
-              <div key={`${item.company}-${item.role}-${item.duration}`} className="py-3">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="font-medium text-zinc-50">{item.role}</p>
-                  <p className="text-xs text-platinum">{item.duration}</p>
-                </div>
-                <p className="mt-1 text-sm text-gold">{item.company}</p>
-                {item.description ? <p className="mt-2 text-sm leading-6 text-platinum">{item.description}</p> : null}
-              </div>
-            ))
-          ) : (
-            <p className="py-3 text-sm text-platinum">No experience extracted.</p>
-          )}
-        </div>
-      </div>
     </article>
   );
 }
@@ -464,22 +427,13 @@ function EmptyClaimsPanel() {
     <article className="border border-white/10 bg-charcoal/60 p-5">
       <h2 className="text-lg font-semibold text-zinc-50">No parsed claims yet</h2>
       <p className="mt-2 text-sm leading-7 text-platinum">
-        Upload a PDF resume to see extracted name, degree, GPA, skills, experience, and
-        certifications here.
+        Upload a PDF resume to see extracted name, degree, GPA, skills, experience, and certifications here.
       </p>
     </article>
   );
 }
 
-function ResumeLibraryPanel({
-  resumes,
-  loading,
-  error
-}: {
-  resumes: ResumeListItem[];
-  loading: boolean;
-  error: string;
-}) {
+function ResumeLibraryPanel({ resumes, loading, error }: { resumes: ResumeListItem[]; loading: boolean; error: string }) {
   return (
     <article className="border border-white/10 bg-charcoal/80">
       <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
@@ -503,19 +457,8 @@ function ResumeLibraryPanel({
                   {resume.original_filename || `Resume #${resume.resume_id}`}
                 </p>
                 <p className="mt-1 text-sm text-platinum">
-                  {resume.claims.name || "Candidate"} · {resume.claims.degree || "Education not detected"}
+                  {resume.claims.name || "Candidate"} - {resume.claims.degree || "Education not detected"}
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {resume.credentials.length ? (
-                    resume.credentials.map((credential) => (
-                      <span key={credential.id} className="border border-white/10 bg-night px-2.5 py-1 text-xs text-zinc-200">
-                        {credential.label}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-platinum">No proof-ready claims</span>
-                  )}
-                </div>
               </div>
               <div className="text-left md:text-right">
                 <p className="text-xs uppercase tracking-[0.16em] text-platinum">Stored</p>
@@ -549,15 +492,7 @@ function formatStoredDate(value: string) {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function ProofPanel({
-  proof,
-  status,
-  onRefresh
-}: {
-  proof: ProofGenerateResponse;
-  status: ProofStatusResponse | null;
-  onRefresh: () => Promise<void>;
-}) {
+function ProofPanel({ proof, status, onRefresh }: { proof: ProofGenerateResponse; status: ProofStatusResponse | null; onRefresh: () => Promise<void> }) {
   return (
     <article className="border border-white/10 bg-charcoal/80 p-5">
       <div className="flex items-start justify-between gap-4">

@@ -31,4 +31,3 @@ export function LogoutButton({ className }: LogoutButtonProps) {
     </button>
   );
 }
-

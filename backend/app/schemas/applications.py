@@ -8,5 +8,4 @@ class ApplicationCreateRequest(BaseModel):
 class ApplicationCreateResponse(BaseModel):
     application_id: int
     job_id: int
-    verification_status: str  # PENDING|VERIFIED|FAILED
-
+    verification_status: str
