@@ -12,6 +12,7 @@ class Resume(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
 
     file_path: Mapped[str] = mapped_column(String, nullable=False)
+    original_filename: Mapped[str | None] = mapped_column(String, nullable=True)
     raw_text: Mapped[str | None] = mapped_column(String, nullable=True)
     parsed_claims: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     fraud_score: Mapped[int | None] = mapped_column(Integer, nullable=True)

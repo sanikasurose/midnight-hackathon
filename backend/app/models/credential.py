@@ -8,7 +8,9 @@ class Credential(Base):
     __tablename__ = "credentials"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    # Hackathon note: allow NULL for existing dev DBs seeded before user_id existed.
+    # Phase 1+ can enforce NOT NULL via migrations if desired.
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=True)
     resume_id: Mapped[int] = mapped_column(ForeignKey("resumes.id", ondelete="CASCADE"), index=True, nullable=False)
 
     claim_type: Mapped[str] = mapped_column(String, nullable=False)

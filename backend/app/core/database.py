@@ -18,6 +18,7 @@ def init_db() -> None:
         conn.execute(text("ALTER TABLE credentials ADD COLUMN IF NOT EXISTS user_id INTEGER"))
 
         conn.execute(text("ALTER TABLE applications ADD COLUMN IF NOT EXISTS credential_id INTEGER"))
+        conn.execute(text("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS original_filename VARCHAR"))
         # Legacy Phase 0 column was `proof_id` (NOT NULL). Drop NOT NULL if it still exists to avoid 500s on insert.
         conn.execute(
             text(
