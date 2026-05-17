@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.schemas.resume import ResumeClaimsResponse, ResumeUploadResponse
+from app.schemas.resume import ResumeClaimsResponse, ResumeUploadResponse, ResumeClaims
 from app.services.ai_engine import AIEngine
 from app.services.resume_service import create_resume_from_upload
+from app.models.resume import Resume
 
 router = APIRouter()
 
@@ -29,12 +31,14 @@ async def upload_resume(
             detail=f"File too large (max {settings.MAX_RESUME_SIZE_MB} MB)",
         )
 
-    ai_engine = AIEngine(settings.ANTHROPIC_API_KEY)
+    ai_engine = AIEngine(settings.GEMINI_API_KEY)
     resume, claims = create_resume_from_upload(db, user_id=user_id, pdf_bytes=pdf_bytes, ai_engine=ai_engine)
     return ResumeUploadResponse(resume_id=resume.id, claims=claims)
 
 
 @router.get("/{resume_id}/claims", response_model=ResumeClaimsResponse)
-def get_claims(resume_id: int) -> ResumeClaimsResponse:
-    # TODO: load claims for a resume
-    return ResumeClaimsResponse(resume_id=resume_id, claims={})
+def get_claims(resume_id: int, db: Session = Depends(get_db)) -> ResumeClaimsResponse:
+    resume = db.execute(select(Resume).where(Resume.id == resume_id)).scalar_one_or_none()
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    return ResumeClaimsResponse(resume_id=resume_id, claims=resume.parsed_claims or {})
