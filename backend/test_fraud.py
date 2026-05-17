@@ -16,21 +16,21 @@ def test_fraud_pipeline():
     # 1. Consistent Clean Profile
     clean_claims = {
         "name": "Jane Doe",
-        "degree": "B.S. in Computer Science from MIT",
+        "degree": "B.S. in Computer Science from MIT (Graduated May 2023)",
         "gpa": 3.9,
         "skills": ["Python", "Go", "Docker"],
         "experience": [
             {
                 "company": "Stripe",
                 "role": "Software Engineer",
-                "duration": "2023-Present",
+                "duration": "September 2023-Present",
                 "description": "Built reliable payment processing APIs using Go and microservices architecture."
             },
             {
                 "company": "Google",
                 "role": "Software Engineering Intern",
-                "duration": "2021-2022",
-                "description": "Optimized database queries for internal web applications."
+                "duration": "June 2022 - August 2022",
+                "description": "Optimized database queries for internal web applications during a summer internship."
             }
         ],
         "certifications": ["AWS Certified Solutions Architect"]

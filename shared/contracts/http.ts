@@ -168,7 +168,6 @@ export type ErrorResponse = {
   code?: string;
   details?: Record<string, unknown>;
 };
-};
 export type JobCreateResponse = { job_id: number };
 
 export type JobApplyRequest = { candidate_id: number; proof_id: string };

@@ -26,11 +26,35 @@ def create_resume_from_upload(
     raw_text = extract_text_from_pdf_bytes(pdf_bytes)
     print(raw_text)
 
+    from app.services.ai_engine import (
+        AIAuthenticationError,
+        AIRateLimitError,
+        AIValidationError,
+        AIConnectionError,
+    )
+
     try:
         claims = ai_engine.parse_resume(raw_text)
-    except NotImplementedError:
-        # Phase 1+ will implement Claude integration.
-        claims = {"degree": None, "gpa": None, "skills": []}
+    except AIAuthenticationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="AI Service Authentication Failed",
+        ) from e
+    except AIRateLimitError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="AI Service rate limit exceeded, please try again later",
+        ) from e
+    except AIValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="AI Service returned invalid schema data",
+        ) from e
+    except AIConnectionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="AI Service connection timed out",
+        ) from e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
