@@ -3,6 +3,7 @@ import json
 import google.generativeai as genai
 from PyPDF2 import PdfReader
 from app.prompts import RESUME_PARSE_PROMPT
+from app.schemas.resume import ResumeClaims
 
 
 class AIEngine:
@@ -39,9 +40,16 @@ class AIEngine:
         response = self.model.generate_content(prompt)
         
         try:
-            return json.loads(response.text)
+            parsed_json = json.loads(response.text)
         except (json.JSONDecodeError, AttributeError) as e:
             raise ValueError(f"Failed to parse Gemini response as JSON: {e}") from e
+
+        try:
+            # Validate that all required fields are present and correctly typed using Pydantic
+            validated_claims = ResumeClaims.model_validate(parsed_json)
+            return validated_claims.model_dump()
+        except Exception as e:
+            raise ValueError(f"Gemini response failed schema validation: {e}") from e
 
     def trust_report(self, resume_claims: dict, job_requirements: dict) -> dict:
         # TODO: call Gemini fraud/trust prompt; return structured report JSON
