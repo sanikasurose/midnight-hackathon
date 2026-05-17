@@ -113,7 +113,7 @@ def generate_proof(
         db.commit()
 
         return ProofGenerateResponse(
-            proof_id=proof_result.get("proof_id", f"proof_{proof.id}"),
+            proof_id=f"proof_{proof.id}",  # Use database ID for consistency
             proof_hash=proof_result.get("proof_hash", ""),
             proof_type=payload.proof_type,
             credential_hash=credential.credential_hash,
@@ -162,12 +162,27 @@ def verify_proof(
     try:
         logger.info(f"POST /proof/verify: proof_id={payload.proof_id}")
 
-        # Fetch proof from DB
-        proof = db.query(Proof).filter(Proof.proof_hash == payload.proof_id).first()
+        # Parse proof_id to extract numeric ID from "proof_{id}" format
+        proof_id_to_query = payload.proof_id
+        if isinstance(payload.proof_id, str) and payload.proof_id.startswith("proof_"):
+            parts = payload.proof_id.split("_")
+            if len(parts) >= 2:
+                try:
+                    # Extract the numeric ID (second part after "proof_")
+                    proof_id_to_query = int(parts[1])
+                except ValueError:
+                    proof_id_to_query = payload.proof_id
+
+        # Fetch proof from DB - try multiple strategies
+        proof = None
         
+        # Strategy 1: Try by database ID (if we extracted a numeric ID)
+        if isinstance(proof_id_to_query, int):
+            proof = db.query(Proof).filter(Proof.id == proof_id_to_query).first()
+        
+        # Strategy 2: Try by proof_hash (if payload is a hash)
         if not proof:
-            # Try by proof_id (backward compat)
-            proof = db.query(Proof).filter(Proof.id == int(payload.proof_id)).first()
+            proof = db.query(Proof).filter(Proof.proof_hash == payload.proof_id).first()
         
         if not proof:
             raise HTTPException(

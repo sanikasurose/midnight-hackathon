@@ -80,6 +80,18 @@ export type ProofStatusResponse = {
   } | null;
 };
 
+export type ProofVerifyRequest = {
+  proof_id: string;
+  requirements: Record<string, unknown>;
+};
+
+export type ProofVerifyResponse = {
+  proof_id: string;
+  verified: boolean;
+  status: "verified" | "failed";
+  details?: Record<string, unknown>;
+};
+
 export type JobRequirement = {
   type: "GPA" | "EXPERIENCE" | "DEGREE" | "CERTIFICATION";
   operator: ">" | ">=" | "==" | "<" | "<=";
