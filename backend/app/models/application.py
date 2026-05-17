@@ -1,5 +1,4 @@
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -14,7 +13,7 @@ class Application(Base):
 
     proof_id: Mapped[str] = mapped_column(String, nullable=False)
     verification_status: Mapped[str] = mapped_column(String, nullable=False, default="PENDING")
-    ai_report: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    ai_report: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
