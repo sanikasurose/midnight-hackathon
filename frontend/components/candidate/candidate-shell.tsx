@@ -8,13 +8,13 @@ import {
   FileUp,
   LayoutDashboard,
   ListChecks,
-  LogOut,
   Menu,
   ShieldCheck,
   X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
+import { LogoutButton } from "@/components/auth/logout-button";
 import { cn } from "@/lib/utils";
 
 type CandidateShellProps = {
@@ -69,7 +69,15 @@ export function CandidateShell({ children }: CandidateShellProps) {
 
         {nav}
 
-        <LandingLink />
+        <div className="absolute bottom-6 left-5 right-5 grid gap-2">
+          <a
+            href="/landing"
+            className="flex items-center gap-3 rounded-sm border border-white/10 px-4 py-3 text-sm text-platinum transition-colors hover:border-gold/40 hover:text-zinc-50"
+          >
+            Back to landing
+          </a>
+          <LogoutButton />
+        </div>
       </aside>
 
       <div
@@ -108,7 +116,15 @@ export function CandidateShell({ children }: CandidateShellProps) {
 
           <CandidatePrivacyCard />
           <CandidateNavigation pathname={pathname} onNavigate={closeMobileNav} className="mt-8" />
-          <LandingLink />
+          <div className="mt-8 grid gap-2">
+            <a
+              href="/landing"
+              className="flex items-center gap-3 rounded-sm border border-white/10 px-4 py-3 text-sm text-platinum transition-colors hover:border-gold/40 hover:text-zinc-50"
+            >
+              Back to landing
+            </a>
+            <LogoutButton />
+          </div>
         </aside>
       </div>
 
@@ -182,17 +198,5 @@ function CandidateNavigation({ pathname, onNavigate, className }: CandidateNavig
         );
       })}
     </nav>
-  );
-}
-
-function LandingLink() {
-  return (
-    <a
-      href="/landing"
-      className="absolute bottom-6 left-5 right-5 flex items-center gap-3 rounded-sm border border-white/10 px-4 py-3 text-sm text-platinum transition-colors hover:border-gold/40 hover:text-zinc-50"
-    >
-      <LogOut size={18} aria-hidden="true" />
-      Back to landing
-    </a>
   );
 }

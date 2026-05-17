@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, Eye, EyeOff, LockKeyhole, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { cn } from "@/lib/utils";
-import type { AuthLoginRequest, AuthRegisterRequest, Role } from "../../../shared/contracts/http";
+import type { AuthLoginRequest, AuthRegisterRequest, AuthResponse, Role } from "../../../shared/contracts/http";
 
 type AuthMode = "login" | "register";
 
@@ -46,6 +47,7 @@ export function AuthPage({ initialMode }: AuthPageProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState("");
+  const [noticeTone, setNoticeTone] = useState<"info" | "error">("info");
   const [form, setForm] = useState<FormState>({
     name: "",
     email: "",
@@ -70,25 +72,56 @@ export function AuthPage({ initialMode }: AuthPageProps) {
 
   function switchMode(nextMode: AuthMode) {
     setNotice("");
+    setNoticeTone("info");
     setMode(nextMode);
     window.history.pushState(null, "", `/${nextMode}`);
   }
 
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
+    setNotice("");
+    setNoticeTone("info");
 
     const payload: AuthLoginRequest | AuthRegisterRequest = isRegister
       ? { email: form.email, password: form.password, role: form.role }
       : { email: form.email, password: form.password };
 
-    await new Promise((resolve) => setTimeout(resolve, 550));
-    setNotice(
-      isRegister
-        ? `Account setup prepared for ${payload.email}. Backend auth can now be connected.`
-        : `Sign-in prepared for ${payload.email}. Backend auth can now be connected.`
-    );
-    setIsSubmitting(false);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    const endpoint = isRegister ? "/auth/register" : "/auth/login";
+
+    try {
+      const response = await fetch(`${apiUrl}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const data = (await response.json().catch(() => null)) as AuthResponse | { detail?: string } | null;
+
+      if (!response.ok) {
+        const message =
+          (data && typeof data === "object" && "detail" in data && typeof data.detail === "string" && data.detail) ||
+          "Authentication failed";
+        setNoticeTone("error");
+        setNotice(message);
+        return;
+      }
+
+      const auth = data as AuthResponse;
+      window.localStorage.setItem("verihire_token", auth.token);
+      window.localStorage.setItem("verihire_user_id", String(auth.user_id));
+      window.localStorage.setItem("verihire_role", auth.role);
+      window.localStorage.setItem("verihire_email", payload.email);
+
+      const redirectTo = auth.role === "EMPLOYER" ? "/employer" : "/candidate/dashboard";
+      window.location.assign(redirectTo);
+    } catch {
+      setNoticeTone("error");
+      setNotice("Backend unavailable. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -271,7 +304,14 @@ export function AuthPage({ initialMode }: AuthPageProps) {
                   </button>
 
                   {notice ? (
-                    <p className="border border-gold/25 bg-gold/[0.08] px-4 py-3 text-sm leading-6 text-champagne">
+                    <p
+                      className={cn(
+                        "px-4 py-3 text-sm leading-6",
+                        noticeTone === "error"
+                          ? "border border-rose-500/25 bg-rose-500/[0.08] text-rose-100"
+                          : "border border-gold/25 bg-gold/[0.08] text-champagne"
+                      )}
+                    >
                       {notice}
                     </p>
                   ) : null}
