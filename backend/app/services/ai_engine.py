@@ -2,8 +2,8 @@ import io
 import json
 import google.generativeai as genai
 from PyPDF2 import PdfReader
-from app.prompts import RESUME_PARSE_PROMPT
-from app.schemas.resume import ResumeClaims
+from app.prompts import RESUME_PARSE_PROMPT, FRAUD_TRUST_PROMPT
+from app.schemas.resume import ResumeClaims, FraudAnalysis
 
 
 class AIEngine:
@@ -17,6 +17,18 @@ class AIEngine:
             model_name="gemini-2.5-flash",
             generation_config={"response_mime_type": "application/json"}
         )
+
+    @staticmethod
+    def _clean_json_text(text: str) -> str:
+        text = text.strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines[-1].startswith("```"):
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+        return text
 
     def _extract_text_from_pdf(self, pdf_bytes: bytes) -> str:
         pdf_file = io.BytesIO(pdf_bytes)
@@ -40,7 +52,8 @@ class AIEngine:
         response = self.model.generate_content(prompt)
         
         try:
-            parsed_json = json.loads(response.text)
+            cleaned_text = self._clean_json_text(response.text)
+            parsed_json = json.loads(cleaned_text)
         except (json.JSONDecodeError, AttributeError) as e:
             raise ValueError(f"Failed to parse Gemini response as JSON: {e}") from e
 
@@ -51,6 +64,46 @@ class AIEngine:
         except Exception as e:
             raise ValueError(f"Gemini response failed schema validation: {e}") from e
 
-    def trust_report(self, resume_claims: dict, job_requirements: dict) -> dict:
-        # TODO: call Gemini fraud/trust prompt; return structured report JSON
-        raise NotImplementedError
+    def trust_report(self, resume_claims: dict, job_requirements: dict, raw_text: str = None) -> dict:
+        """
+        Analyzes structured résumé claims and optionally raw text/job requirements for anomalies:
+        - Timeline gaps
+        - Inflated claims
+        - Inconsistent dates
+        - Suspicious wording
+        
+        Returns validated structured JSON: { "fraud_score": 0-100, "flags": [...] }
+        """
+        from datetime import datetime
+        current_date_str = datetime.utcnow().strftime("%B %Y")
+        
+        prompt = f"""
+        {FRAUD_TRUST_PROMPT}
+        
+        Current Evaluation Date: {current_date_str}
+        
+        Structured Resume Claims:
+        {json.dumps(resume_claims, indent=2)}
+        
+        Job Requirements (optional):
+        {json.dumps(job_requirements, indent=2) if job_requirements else "None"}
+        
+        Raw Resume Text (optional):
+        {raw_text if raw_text else "None"}
+        """
+        
+        response = self.model.generate_content(prompt)
+        
+        try:
+            cleaned_text = self._clean_json_text(response.text)
+            parsed_json = json.loads(cleaned_text)
+        except (json.JSONDecodeError, AttributeError) as e:
+            raise ValueError(f"Failed to parse Gemini response as JSON: {e}") from e
+
+        try:
+            # Validate response using FraudAnalysis schema for a guaranteed stable structure
+            validated_report = FraudAnalysis.model_validate(parsed_json)
+            return validated_report.model_dump()
+        except Exception as e:
+            raise ValueError(f"Gemini trust report failed schema validation: {e}") from e
+
