@@ -41,7 +41,7 @@ class AIEngine:
         try:
             return json.loads(response.text)
         except (json.JSONDecodeError, AttributeError) as e:
-            return {"error": "Failed to parse Gemini response into JSON", "raw_content": response.text}
+            raise ValueError(f"Failed to parse Gemini response as JSON: {e}") from e
 
     def trust_report(self, resume_claims: dict, job_requirements: dict) -> dict:
         # TODO: call Gemini fraud/trust prompt; return structured report JSON
