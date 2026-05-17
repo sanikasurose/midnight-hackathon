@@ -4,10 +4,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import HTTPException, status
+from fastapi import Depends
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
 from app.models.user import User
@@ -47,6 +49,22 @@ def decode_token(token: str) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
         ) from e
+
+
+_bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def get_bearer_token(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+) -> str:
+    """
+    Swagger-compatible Bearer token extractor.
+    - Adds the "Authorize" button in Swagger UI (HTTP Bearer).
+    - Returns the raw JWT string (no "Bearer " prefix).
+    """
+    if not credentials or not credentials.credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
+    return credentials.credentials
 
 
 def get_user_by_email(db: Session, email: str) -> User | None:
