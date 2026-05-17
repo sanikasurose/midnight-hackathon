@@ -7,6 +7,8 @@ import { ArrowLeft, ArrowRight, BriefcaseBusiness, Check, Eye, EyeOff, LockKeyho
 import { Logo } from "@/components/ui/logo";
 import { cn } from "@/lib/utils";
 import type { AuthLoginRequest, AuthRegisterRequest, AuthResponse, Role } from "../../../shared/contracts/http";
+import { api, ApiError } from "@/lib/api";
+import { storeAuthSession } from "@/components/auth/auth-storage";
 
 type AuthMode = "login" | "register";
 
@@ -87,38 +89,17 @@ export function AuthPage({ initialMode }: AuthPageProps) {
       ? { email: form.email, password: form.password, role: form.role }
       : { email: form.email, password: form.password };
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-    const endpoint = isRegister ? "/auth/register" : "/auth/login";
-
     try {
-      const response = await fetch(`${apiUrl}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      const data = (await response.json().catch(() => null)) as AuthResponse | { detail?: string } | null;
-
-      if (!response.ok) {
-        const message =
-          (data && typeof data === "object" && "detail" in data && typeof data.detail === "string" && data.detail) ||
-          "Authentication failed";
-        setNoticeTone("error");
-        setNotice(message);
-        return;
-      }
-
-      const auth = data as AuthResponse;
-      window.localStorage.setItem("verihire_token", auth.token);
-      window.localStorage.setItem("verihire_user_id", String(auth.user_id));
-      window.localStorage.setItem("verihire_role", auth.role);
-      window.localStorage.setItem("verihire_email", payload.email);
+      const auth: AuthResponse = isRegister
+        ? await api.register(payload as AuthRegisterRequest)
+        : await api.login(payload as AuthLoginRequest);
+      storeAuthSession(auth, payload.email);
 
       const redirectTo = auth.role === "EMPLOYER" ? "/employer" : "/candidate/dashboard";
       window.location.assign(redirectTo);
-    } catch {
+    } catch (error) {
       setNoticeTone("error");
-      setNotice("Backend unavailable. Please try again.");
+      setNotice(error instanceof ApiError ? error.message : "Authentication failed. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

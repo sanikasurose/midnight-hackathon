@@ -70,12 +70,6 @@ export function CandidateShell({ children }: CandidateShellProps) {
         {nav}
 
         <div className="absolute bottom-6 left-5 right-5 grid gap-2">
-          <a
-            href="/landing"
-            className="flex items-center gap-3 rounded-sm border border-white/10 px-4 py-3 text-sm text-platinum transition-colors hover:border-gold/40 hover:text-zinc-50"
-          >
-            Back to landing
-          </a>
           <LogoutButton />
         </div>
       </aside>
@@ -117,12 +111,6 @@ export function CandidateShell({ children }: CandidateShellProps) {
           <CandidatePrivacyCard />
           <CandidateNavigation pathname={pathname} onNavigate={closeMobileNav} className="mt-8" />
           <div className="mt-8 grid gap-2">
-            <a
-              href="/landing"
-              className="flex items-center gap-3 rounded-sm border border-white/10 px-4 py-3 text-sm text-platinum transition-colors hover:border-gold/40 hover:text-zinc-50"
-            >
-              Back to landing
-            </a>
             <LogoutButton />
           </div>
         </aside>

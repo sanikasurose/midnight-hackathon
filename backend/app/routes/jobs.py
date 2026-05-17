@@ -6,9 +6,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.models.application import Application
+from app.models.job import Job
 from app.models.user import User
 from app.schemas.applications import ApplicationCreateRequest, ApplicationCreateResponse
-from app.schemas.jobs import JobCreateRequest, JobCreateResponse, JobGetResponse, JobListItem, JobRequirement
+from app.schemas.jobs import (
+    EmployerApplicationItem,
+    JobCreateRequest,
+    JobCreateResponse,
+    JobGetResponse,
+    JobListItem,
+    JobRequirement,
+)
 from app.services.application_service import create_application
 from app.services.auth_service import decode_token, get_bearer_token
 from app.services.job_service import create_job as create_job_record
@@ -25,12 +34,7 @@ def _normalize_requirements(requirements: dict[str, Any] | list[JobRequirement])
     return requirements
 
 
-@router.post("", response_model=JobCreateResponse)
-def create_job(
-    payload: JobCreateRequest,
-    db: Session = Depends(get_db),
-    token: str = Depends(get_bearer_token),
-) -> JobCreateResponse:
+def _require_employer(token: str) -> int:
     claims = decode_token(token)
     role = claims.get("role")
     employer_id = claims.get("user_id")
@@ -39,6 +43,16 @@ def create_job(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Employer role required")
     if not isinstance(employer_id, int):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    return employer_id
+
+
+@router.post("", response_model=JobCreateResponse)
+def create_job(
+    payload: JobCreateRequest,
+    db: Session = Depends(get_db),
+    token: str = Depends(get_bearer_token),
+) -> JobCreateResponse:
+    employer_id = _require_employer(token)
 
     employer = db.execute(select(User).where(User.id == employer_id)).scalar_one_or_none()
     if not employer:
@@ -56,10 +70,77 @@ def create_job(
     return JobCreateResponse(job_id=job.id, title=job.title)
 
 
+@router.get("/employer/mine", response_model=list[JobListItem])
+def list_employer_jobs(
+    db: Session = Depends(get_db),
+    token: str = Depends(get_bearer_token),
+) -> list[JobListItem]:
+    employer_id = _require_employer(token)
+    jobs = (
+        db.execute(select(Job).where(Job.employer_id == employer_id).order_by(Job.created_at.desc(), Job.id.desc()))
+        .scalars()
+        .all()
+    )
+    return [
+        JobListItem(
+            id=job.id,
+            title=job.title,
+            description=job.description,
+            requirements=job.requirements or {},
+            application_count=len(job.applications),
+            created_at=job.created_at.isoformat() if job.created_at else None,
+        )
+        for job in jobs
+    ]
+
+
+@router.get("/employer/applications", response_model=list[EmployerApplicationItem])
+def list_employer_applications(
+    db: Session = Depends(get_db),
+    token: str = Depends(get_bearer_token),
+) -> list[EmployerApplicationItem]:
+    employer_id = _require_employer(token)
+    rows = (
+        db.execute(
+            select(Application)
+            .join(Job, Application.job_id == Job.id)
+            .where(Job.employer_id == employer_id)
+            .order_by(Application.created_at.desc(), Application.id.desc())
+        )
+        .scalars()
+        .all()
+    )
+
+    return [
+        EmployerApplicationItem(
+            application_id=application.id,
+            job_id=application.job_id,
+            job_title=application.job.title,
+            candidate_id=application.candidate_id,
+            candidate_email=application.candidate.email if application.candidate else None,
+            credential_id=application.credential_id,
+            credential_type=application.credential.claim_type if application.credential else None,
+            verification_status=application.verification_status,
+            created_at=application.created_at.isoformat() if application.created_at else None,
+        )
+        for application in rows
+    ]
+
+
 @router.get("", response_model=list[JobListItem])
 def list_jobs(db: Session = Depends(get_db)) -> list[JobListItem]:
     jobs = list_jobs_records(db)
-    return [JobListItem(id=job.id, title=job.title, requirements=job.requirements or {}) for job in jobs]
+    return [
+        JobListItem(
+            id=job.id,
+            title=job.title,
+            description=job.description,
+            requirements=job.requirements or {},
+            application_count=len(job.applications),
+            created_at=job.created_at.isoformat() if job.created_at else None,
+        )
+        for job in jobs
+    ]
 
 
 @router.get("/{job_id}", response_model=JobGetResponse)

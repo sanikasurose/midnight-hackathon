@@ -25,6 +25,9 @@ class JobListItem(BaseModel):
     id: int
     title: str
     requirements: dict
+    description: str | None = None
+    application_count: int = 0
+    created_at: str | None = None
 
 
 class JobGetResponse(BaseModel):
@@ -32,4 +35,16 @@ class JobGetResponse(BaseModel):
     title: str
     description: str
     requirements: dict
+
+
+class EmployerApplicationItem(BaseModel):
+    application_id: int
+    job_id: int
+    job_title: str
+    candidate_id: int
+    candidate_email: str | None = None
+    credential_id: int | None = None
+    credential_type: str | None = None
+    verification_status: str
+    created_at: str | None = None
 

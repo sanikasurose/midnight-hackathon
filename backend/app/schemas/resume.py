@@ -10,17 +10,33 @@ class ExperienceItem(BaseModel):
 
 
 class ResumeClaims(BaseModel):
-    name: str
-    degree: str
+    name: str = "Candidate"
+    degree: str = "Not detected"
     gpa: Optional[float] = None
-    skills: List[str]
-    experience: List[ExperienceItem]
-    certifications: List[str]
+    skills: List[str] = Field(default_factory=list)
+    experience: List[ExperienceItem] = Field(default_factory=list)
+    certifications: List[str] = Field(default_factory=list)
+
+
+class ResumeCredential(BaseModel):
+    id: int
+    claim_type: str
+    label: str
+    verification_status: str
 
 
 class ResumeUploadResponse(BaseModel):
     resume_id: int
     claims: ResumeClaims
+    credentials: List[ResumeCredential] = []
+
+
+class ResumeListItem(BaseModel):
+    resume_id: int
+    original_filename: Optional[str] = None
+    created_at: str
+    claims: ResumeClaims
+    credentials: List[ResumeCredential] = []
 
 
 class ResumeClaimsResponse(BaseModel):

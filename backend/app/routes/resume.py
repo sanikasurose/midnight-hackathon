@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.schemas.resume import ResumeClaimsResponse, ResumeUploadResponse, ResumeClaims
+from app.schemas.resume import ResumeClaimsResponse, ResumeCredential, ResumeListItem, ResumeUploadResponse
 from app.services.ai_engine import AIEngine
 from app.services.file_storage import validate_file_size, validate_pdf_upload
 from app.services.resume_service import create_resume_from_upload
@@ -24,15 +24,43 @@ async def upload_resume(
     pdf_bytes = await file.read()
     validate_file_size(file_bytes=pdf_bytes, max_size_mb=int(settings.MAX_RESUME_SIZE_MB))
 
-    ai_engine = AIEngine(settings.ANTHROPIC_API_KEY)
-    resume, claims = create_resume_from_upload(
+    ai_engine = AIEngine(settings.GEMINI_API_KEY)
+    resume, claims, credentials = create_resume_from_upload(
         db,
         user_id=user_id,
         pdf_bytes=pdf_bytes,
         original_filename=file.filename,
         ai_engine=ai_engine,
     )
-    return ResumeUploadResponse(resume_id=resume.id, claims=claims)
+    return ResumeUploadResponse(
+        resume_id=resume.id,
+        claims=claims,
+        credentials=[serialize_credential(credential) for credential in credentials],
+    )
+
+
+@router.get("/user/{user_id}", response_model=list[ResumeListItem])
+def list_user_resumes(user_id: int, db: Session = Depends(get_db)) -> list[ResumeListItem]:
+    resumes = (
+        db.execute(
+            select(Resume)
+            .where(Resume.user_id == user_id)
+            .order_by(Resume.created_at.desc(), Resume.id.desc())
+        )
+        .scalars()
+        .all()
+    )
+
+    return [
+        ResumeListItem(
+            resume_id=resume.id,
+            original_filename=resume.original_filename,
+            created_at=resume.created_at.isoformat() if resume.created_at else "",
+            claims=resume.parsed_claims or {},
+            credentials=[serialize_credential(credential) for credential in resume.credentials],
+        )
+        for resume in resumes
+    ]
 
 
 @router.get("/{resume_id}/claims", response_model=ResumeClaimsResponse)
@@ -41,3 +69,22 @@ def get_claims(resume_id: int, db: Session = Depends(get_db)) -> ResumeClaimsRes
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
     return ResumeClaimsResponse(resume_id=resume_id, claims=resume.parsed_claims or {})
+
+
+def serialize_credential(credential) -> ResumeCredential:
+    return ResumeCredential(
+        id=credential.id,
+        claim_type=credential.claim_type,
+        label=get_credential_label(credential.claim_type),
+        verification_status=credential.verification_status,
+    )
+
+
+def get_credential_label(claim_type: str) -> str:
+    labels = {
+        "GPA": "GPA threshold proof",
+        "DEGREE": "Education claim",
+        "EXPERIENCE": "Experience claim",
+        "CERTIFICATION": "Certification claim",
+    }
+    return labels.get(claim_type, claim_type.title())
